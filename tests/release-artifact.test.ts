@@ -17,6 +17,7 @@ import { join } from "node:path";
 import {
   artifactReleaseId,
   buildDistribution,
+  hasAdditionalMarkerOccurrences,
   verifyDistributionArtifact,
   type ArtifactManifest,
 } from "../scripts/build-distribution.ts";
@@ -104,6 +105,41 @@ test("sanitized output is a self-contained, target-identified release", () => {
       path,
     ).toBe(0);
   }
+});
+
+test("compiler-owned upstream paths are not mistaken for private recipient data", () => {
+  const outputRoot = join(scratch, "runner-home-artifact");
+  const runnerHome = ["", "Users", "runner"].join("/");
+  const result = Bun.spawnSync([
+    process.execPath,
+    join(import.meta.dir, "..", "scripts", "build-distribution.ts"),
+    "--output",
+    outputRoot,
+  ], {
+    env: { ...process.env, HOME: runnerHome },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  expect(new TextDecoder().decode(result.stderr)).toBe("");
+  expect(result.exitCode).toBe(0);
+  expect(() => verifyDistributionArtifact(outputRoot)).not.toThrow();
+}, 120_000);
+
+test("binary privacy baselines still reject an additional host-home path", () => {
+  const runnerHome = ["", "Users", "runner"].join("/");
+  const compiler = Buffer.from(`${runnerHome}/work/_temp/upstream-runtime`);
+  const inheritedRuntime = Buffer.from(`${runnerHome}/work/_temp/upstream-runtime`);
+  const leakedBuildState = Buffer.from(
+    `${runnerHome}/work/_temp/upstream-runtime\0${runnerHome}/private/config.json`,
+  );
+
+  expect(
+    hasAdditionalMarkerOccurrences(inheritedRuntime, compiler, runnerHome),
+  ).toBe(false);
+  expect(
+    hasAdditionalMarkerOccurrences(leakedBuildState, compiler, runnerHome),
+  ).toBe(true);
 });
 
 test("verification rejects unlisted files and symlinks", () => {

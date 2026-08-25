@@ -385,6 +385,8 @@ function privacyScan(outputRoot: string, sourceRoot: string): void {
     /pt_[a-z0-9]{10}\b/,
     /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   ];
+  const compilerBytes = readFileSync(process.execPath);
+  const hostHome = homedir();
   for (const path of walk(outputRoot, ".")) {
     const normalized = relative(outputRoot, join(outputRoot, path));
     if (normalized.endsWith(".shortcut")) {
@@ -405,10 +407,17 @@ function privacyScan(outputRoot: string, sourceRoot: string): void {
     }
     if ((ARTIFACT_EXECUTABLES as readonly string[]).includes(normalized)) {
       const bytes = readFileSync(join(outputRoot, path));
-      for (const marker of [sourceRoot, homedir()]) {
-        if (bytes.includes(Buffer.from(marker))) {
-          throw new Error(`distribution binary privacy scan rejected ${normalized}`);
-        }
+      if (bytes.includes(Buffer.from(sourceRoot))) {
+        throw new Error(`distribution binary privacy scan rejected ${normalized}`);
+      }
+      // Compiled executables contain the pinned Bun runtime. Its own upstream
+      // build paths are harmless baseline bytes (including the GitHub Actions
+      // runner home); only additional host-home occurrences indicate that
+      // Wordhold embedded recipient/build-machine state.
+      if (
+        hasAdditionalMarkerOccurrences(bytes, compilerBytes, hostHome)
+      ) {
+        throw new Error(`distribution binary privacy scan rejected ${normalized}`);
       }
       continue;
     }
@@ -420,6 +429,27 @@ function privacyScan(outputRoot: string, sourceRoot: string): void {
       }
     }
   }
+}
+
+export function hasAdditionalMarkerOccurrences(
+  bytes: Uint8Array,
+  baseline: Uint8Array,
+  marker: string,
+): boolean {
+  return countOccurrences(bytes, marker) > countOccurrences(baseline, marker);
+}
+
+function countOccurrences(bytes: Uint8Array, marker: string): number {
+  const haystack = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  const needle = Buffer.from(marker);
+  if (!needle.length) return 0;
+  let count = 0;
+  let offset = 0;
+  while ((offset = haystack.indexOf(needle, offset)) !== -1) {
+    count += 1;
+    offset += needle.length;
+  }
+  return count;
 }
 
 export function buildDistribution(

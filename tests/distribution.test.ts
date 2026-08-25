@@ -30,6 +30,7 @@ import {
   configureIphoneCapture,
   configureOnlineIphoneCapture,
 } from "../scripts/configure-iphone.ts";
+import { withFakeAgentClients } from "./helpers/fake-agent-clients.ts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -356,6 +357,11 @@ test("sanitized artifact proves clean install, isolation, update safety, rebuild
   const hermesHome = join(clientHomes, "hermes");
   mkdirSync(codexHome, { recursive: true });
   mkdirSync(hermesHome, { recursive: true });
+  const clientEnv = withFakeAgentClients(clientHomes, {
+    ...process.env,
+    CODEX_HOME: codexHome,
+    HERMES_HOME: hermesHome,
+  });
   for (const client of ["codex", "hermes"]) {
     run(
       [
@@ -366,13 +372,11 @@ test("sanitized artifact proves clean install, isolation, update safety, rebuild
         "--client",
         client,
       ],
-      { CODEX_HOME: codexHome, HERMES_HOME: hermesHome },
+      clientEnv,
     );
   }
   const codexEntry = JSON.parse(
-    run(["codex", "mcp", "get", "papertrail", "--json"], {
-      CODEX_HOME: codexHome,
-    }),
+    run(["codex", "mcp", "get", "papertrail", "--json"], clientEnv),
   );
   expect(codexEntry.transport).toMatchObject({
     type: "stdio",
@@ -380,7 +384,7 @@ test("sanitized artifact proves clean install, isolation, update safety, rebuild
     env: { PAPERTRAIL_ROOT: dataRoot },
   });
   expect(
-    run(["hermes", "mcp", "test", "papertrail"], { HERMES_HOME: hermesHome }),
+    run(["hermes", "mcp", "test", "papertrail"], clientEnv),
   ).toContain("search_items");
   run([join(installRoot, "current", "bin", "papertrail-enrich")], {
     PAPERTRAIL_ROOT: dataRoot,
@@ -634,16 +638,22 @@ test("sanitized artifact proves clean install, isolation, update safety, rebuild
     "approve",
   ], phoneEnv);
   const configBeforeUninstall = readFileSync(configPath, "utf8");
-  const uninstall = lifecycleJson("uninstall", updateArtifact, installRoot);
+  const uninstall = lifecycleJson(
+    "uninstall",
+    updateArtifact,
+    installRoot,
+    undefined,
+    clientEnv,
+  );
   expect(uninstall.dataRoot).toBe(realpathSync(dataRoot));
   expect(existsSync(pt)).toBe(false);
   expect(
     Bun.spawnSync(["codex", "mcp", "get", "papertrail", "--json"], {
-      env: { ...process.env, CODEX_HOME: codexHome },
+      env: clientEnv,
     }).exitCode,
   ).not.toBe(0);
   expect(
-    run(["hermes", "mcp", "list"], { HERMES_HOME: hermesHome }),
+    run(["hermes", "mcp", "list"], clientEnv),
   ).not.toMatch(/\bpapertrail\b/i);
   expect(existsSync(join(hermesHome, "skills", "papertrail", "SKILL.md"))).toBe(false);
   expect(readFileSync(configPath, "utf8")).toBe(configBeforeUninstall);

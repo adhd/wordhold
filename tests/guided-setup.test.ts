@@ -25,6 +25,7 @@ import {
   reconcileLaunchAgentFilesForTest,
   renderLaunchAgents,
 } from "../scripts/install-launchd.ts";
+import { withFakeAgentClients } from "./helpers/fake-agent-clients.ts";
 
 let scratch: string;
 let artifact: string;
@@ -484,13 +485,13 @@ test("guided Codex and Hermes setup use the same packaged six-tool server", asyn
   const dataRoot = join(home, "data");
   const codexHome = join(home, "codex");
   const hermesHome = join(home, "hermes");
-  const env = {
+  const env = withFakeAgentClients(home, {
     ...process.env,
     HOME: home,
     PATH: process.env.PATH ?? "/usr/bin:/bin",
     CODEX_HOME: codexHome,
     HERMES_HOME: hermesHome,
-  };
+  });
   mkdirSync(codexHome, { recursive: true });
   mkdirSync(hermesHome, { recursive: true });
   ok([
