@@ -1,0 +1,13 @@
+name = "wordhold-worker"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+[[d1_databases]]
+binding = "INBOX"
+database_name = "REPLACE_WITH_D1_DATABASE_NAME"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BODIES"
+bucket_name = "REPLACE_WITH_R2_BUCKET_NAME"

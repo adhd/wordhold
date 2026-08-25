@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+.wrangler/
+.scratch/
+.DS_Store
+
+# Product source and private runtime/corpus authority are separate repositories.
+# These paths must never become source-repository members.
+papertrail.config.json
+papertrail.db*
+wordhold.config.json
+wordhold.db*
+items/
+inbox/
+logs/
+agent/tags.md
+worker/wrangler.toml

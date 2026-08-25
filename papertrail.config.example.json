@@ -1,0 +1,24 @@
+{
+  "capabilities": {
+    "workerInbox": false,
+    "icloudInbox": false,
+    "readingList": false,
+    "enrichment": false,
+    "digest": false,
+    "resurfacing": false
+  },
+  "worker": {
+    "baseUrl": "",
+    "secret": ""
+  },
+  "icloudInboxDir": "",
+  "readingListPlist": "",
+  "imessage": {
+    "recipient": "",
+    "dryRun": true
+  },
+  "enrichment": {
+    "minBodyChars": 600,
+    "maxFetchAttempts": 5
+  }
+}

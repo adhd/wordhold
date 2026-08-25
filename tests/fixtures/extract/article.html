@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>The Craft of Extraction — Example Journal</title>
+    <link
+      rel="canonical"
+      href="https://example.com/essays/craft-of-extraction"
+    />
+    <meta
+      property="og:url"
+      content="https://example.com/essays/craft-of-extraction"
+    />
+    <meta property="og:title" content="The Craft of Extraction" />
+    <meta name="author" content="Jane Doe" />
+    <meta
+      property="article:published_time"
+      content="2026-03-14T09:00:00.000Z"
+    />
+    <style>
+      body {
+        font-family: Georgia, serif;
+        margin: 0;
+      }
+      .newsletter-upsell {
+        background: #ffe;
+        padding: 2rem;
+      }
+    </style>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <nav>
+        <a href="/">Home</a>
+        <a href="/essays">Essays</a>
+        <a href="/about">About</a>
+      </nav>
+    </header>
+    <article>
+      <h1>The Craft of Extraction</h1>
+      <p class="byline">By Jane Doe · March 14, 2026</p>
+      <p>
+        Every reading pipeline lives or dies on one unglamorous step: turning a
+        web page, with its navigation bars, cookie banners, newsletter upsells,
+        and comment threads, into the clean text a person actually read. Get
+        this wrong and everything downstream rots. Summaries summarize chrome,
+        search indexes match footer boilerplate, and the archive you promised
+        yourself becomes a junk drawer of markup.
+      </p>
+      <p>
+        The temptation is to treat extraction as a solved problem, something you
+        bolt on in an afternoon with whatever library is nearest. In practice it
+        is a long tail of small decisions, each one boring on its own, each one
+        compounding. Which container holds the article? Is that pull quote
+        content or decoration? Does the code sample survive the trip, or does it
+        come out as a single mangled line with its indentation stripped and its
+        angle brackets escaped?
+      </p>
+      <h2>Why boilerplate wins by default</h2>
+      <p>
+        A modern article page is mostly not the article. Measured by markup
+        weight, the story is a minority tenant in its own house, surrounded by
+        sharing widgets, related-content carousels, and three different
+        subscription prompts. Any naive text dump inherits all of it. The
+        classic answer is readability-style content scoring, the approach behind
+        <a href="https://github.com/mozilla/readability">Readability</a>, which
+        walks the DOM, scores candidate blocks by text density, link density,
+        and paragraph structure, and keeps the winner.
+      </p>
+      <p>
+        Scoring works because articles have a shape. Long paragraphs, real
+        sentences with commas, few links per word. Chrome has the opposite
+        shape: short strings, dense links, shallow nesting repeated across every
+        page of the site. The algorithm does not need to understand the words to
+        tell the difference, and that indifference is what makes it robust
+        across a decade of redesigns.
+      </p>
+      <blockquote>
+        <p>
+          The reader does not care how clever the pipeline is. The reader cares
+          that the words on the page are the words the author wrote, all of
+          them, in order, with nothing bolted on.
+        </p>
+      </blockquote>
+      <h2>What must survive the trip</h2>
+      <p>
+        Extraction is a lossy transformation by design, but the losses have to
+        be the right ones. Headings must survive, because they carry the
+        skeleton of the argument. Links must survive, because a link is a
+        citation and stripping it is a small act of vandalism. Blockquotes must
+        survive, because attribution matters. And code must survive verbatim,
+        fenced and intact, because a reader who saved a technical post wants the
+        exact incantation, not a prose description of it.
+      </p>
+      <pre><code>const captures = await drain(inbox);
+for (const capture of captures) {
+  persist(capture); // durable before any fetch is attempted
+}</code></pre>
+      <p>
+        Everything else can go. Bylines are metadata, not body. Publication
+        dates belong in frontmatter. The author photo, the estimated reading
+        time, the floating share rail: none of it was ever part of the text. A
+        good extractor is judged as much by what it refuses to keep as by what
+        it keeps.
+      </p>
+      <p>
+        The honest failure matters most of all. When a page is a paywall shell
+        or an empty JavaScript husk, the right output is a recorded failure that
+        says so, queryable and retryable, never a confident summary of nothing.
+        An archive you cannot trust to admit its gaps is worse than no archive,
+        because it teaches you to stop checking.
+      </p>
+    </article>
+    <aside class="newsletter-upsell">
+      <p>Enjoying this essay? Subscribe for weekly posts.</p>
+      <button>Subscribe</button>
+    </aside>
+    <footer>
+      <p>© 2026 Example Journal. All rights reserved.</p>
+    </footer>
+    <script src="/js/analytics.js"></script>
+  </body>
+</html>

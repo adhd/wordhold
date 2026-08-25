@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "version": "0.4.0",
+  "workflowName": "Save to Papertrail — Online",
+  "status": "owner_qualified",
+  "sha256": "ff657efe92c04583586797e633a89a1d66d1287108f4d76b19880288ffde8d95",
+  "buildMarker": null
+}

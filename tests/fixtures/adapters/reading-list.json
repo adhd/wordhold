@@ -1,0 +1,35 @@
+{
+  "WebBookmarkFileVersion": 1,
+  "Children": [
+    {
+      "Title": "BookmarksBar",
+      "Children": [
+        {
+          "URLString": "https://example.com/regular-bookmark",
+          "URIDictionary": { "title": "Not In Reading List" }
+        }
+      ]
+    },
+    {
+      "Title": "com.apple.ReadingList",
+      "Children": [
+        {
+          "URLString": "https://example.com/one",
+          "URIDictionary": { "title": "Article One" },
+          "ReadingList": {
+            "DateAdded": "2026-06-01T12:34:56Z",
+            "PreviewText": "Preview of article one."
+          }
+        },
+        {
+          "URLString": "https://example.com/two",
+          "URIDictionary": { "title": "Article Two" },
+          "ReadingList": { "DateAdded": "2026-07-02T08:00:00Z" }
+        },
+        {
+          "Title": "entry with no URLString, skipped"
+        }
+      ]
+    }
+  ]
+}
