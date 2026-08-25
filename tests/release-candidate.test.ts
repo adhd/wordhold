@@ -164,6 +164,18 @@ test("downloaded release qualification refuses an incomplete evidence set", () =
   );
 });
 
+test("hardened Bun producer flags use the supported value syntax", () => {
+  const result = Bun.spawnSync([
+    process.execPath,
+    "--no-env-file",
+    "--config=/dev/null",
+    "--eval",
+    "process.stdout.write('producer-ready')",
+  ]);
+  expect(result.exitCode).toBe(0);
+  expect(new TextDecoder().decode(result.stdout)).toBe("producer-ready");
+});
+
 test("authenticated GitHub queries ignore an inherited non-canonical host", () => {
   expect(authenticatedGithubEnvironment({
     GH_HOST: "attacker.invalid",

@@ -126,7 +126,7 @@ git fetch origin tag "$RC"
 bun install --frozen-lockfile --ignore-scripts
 test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 test "$(git rev-parse HEAD)" = "$(git rev-parse "$RC^{commit}")"
-bun --no-env-file --config /dev/null run scripts/release-candidate.ts \
+bun --no-env-file --config=/dev/null run scripts/release-candidate.ts \
   --candidate "$RC" --output "$RC_OUTPUT"
 WORDHOLD_RELEASE_ARTIFACT="$RC_OUTPUT/$RC_STEM" \
   PAPERTRAIL_V01_ARCHIVE="$V01_ARCHIVE" \

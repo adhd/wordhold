@@ -17,7 +17,7 @@ full suite, application and Worker typechecks, standalone compilation,
 source/history/privacy checks, documentation checks, lifecycle and compatibility
 tests, and focused tests for any changed path.
 
-`bun --no-env-file --config /dev/null run scripts/release-candidate.ts
+`bun --no-env-file --config=/dev/null run scripts/release-candidate.ts
 --candidate v0.5.0-rc.N --output NEW_DIRECTORY` is the release producer. The
 explicit flags prevent ignored cwd dotenv and Bun configuration from becoming
 producer input. It fails unless the tag resolves to `HEAD`, package and

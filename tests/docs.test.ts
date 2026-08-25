@@ -155,6 +155,13 @@ test("public cold-start documentation has valid links and preserves private-data
     "scripts/release-candidate.ts",
   );
   expect(byPath.get("docs/operations.md")).toContain(
+    "bun --no-env-file --config=/dev/null run scripts/release-candidate.ts",
+  );
+  expect(byPath.get("docs/release-verification.md")).toContain(
+    "bun --no-env-file --config=/dev/null run scripts/release-candidate.ts",
+  );
+  expect(text).not.toContain("--config /dev/null");
+  expect(byPath.get("docs/operations.md")).toContain(
     "ambient `node_modules` is not release input",
   );
   expect(byPath.get("docs/operations.md")).toContain("release:verify-download");
