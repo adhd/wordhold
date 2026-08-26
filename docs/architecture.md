@@ -41,7 +41,14 @@ The launchd daemon target is a compiled Bun executable. The SQL schema is import
 3. Daemon, enrichment, and resurfacing serialize writes through `core/writer.ts`. Before touching a path, the active writer durably claims it in `inbox/writer-intents/`; a path already dirty without that writer's intent is refused as human/other-writer work. Interrupted intents let the same writer recover and commit its own complete atomic files on restart.
 4. Ingestion writes canonical Markdown atomically, then updates SQLite. URL aliases and delivery identities prevent restart replay from minting another item. A capture keeps its caller idempotency identity separate from its opaque upstream acknowledgement id; both survive the ignored raw spool, while canonical Markdown stores only the caller-identity hash. URL-less newsletters include the Worker delivery id (or capture timestamp fallback) in their private dedupe identity, so recurring same-title issues remain distinct.
 5. A canonical-URL merge writes an `inbox/merges/` intent before replacing the winner and deleting the loser. Any rebuild completes that deterministic file merge first, so death at either file boundary cannot leave an unrebuildable duplicate URL. Runtime startup and `wordhold rebuild` do this under the daemon writer intent; `wordhold rebuild` commits the exact recovered paths before clearing it. Manual provenance wins same-text AI collisions and keeps the manual highlight id.
-6. The daemon commits exactly the changed paths in its writer intent. A newly created path that was merged away before its first commit is filtered as transient rather than passed to Git as a nonexistent path; tracked deletions remain staged normally. It never rescans and absorbs the enrichment writer's namespace or unrelated staged/working-tree changes.
+6. The daemon commits exactly the changed paths in its writer intent. Every
+   product-owned Git command pins the corpus working directory and clears inherited `GIT_*` state.
+   It also ignores user/system configuration, disables hooks, and uses explicit
+   pathspecs; the corpus repository's local identity configuration remains in
+   force. A newly created path that was merged away before its first commit is
+   filtered as transient rather than passed to Git as a nonexistent path;
+   tracked deletions remain staged normally. It never rescans and absorbs the
+   enrichment writer's namespace or unrelated staged/working-tree changes.
 7. Only after that commit succeeds does the adapter acknowledge/delete upstream state. The raw spool record is removed after acknowledgement. Source health becomes green only after all of those boundaries; commit or acknowledgement failure marks the affected source and daemon job while retaining recoverable state. A crash at any earlier boundary leaves enough state for idempotent replay.
 
 The Worker has two authentication roles. `SECRET` is the daemon/admin credential

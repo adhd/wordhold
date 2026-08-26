@@ -83,10 +83,10 @@ fixture.
 (
 set -eu
 REPOSITORY=adhd/wordhold
-RC=v0.5.0-rc.2
-RC_STEM=Wordhold-0.5.0-rc.2-darwin-arm64
-SOURCE=/absolute/new/path/wordhold-v0.5.0-rc.2-source
-RC_OUTPUT=/absolute/new/path/wordhold-v0.5.0-rc.2
+RC=v0.5.0-rc.3
+RC_STEM=Wordhold-0.5.0-rc.3-darwin-arm64
+SOURCE=/absolute/new/path/wordhold-v0.5.0-rc.3-source
+RC_OUTPUT=/absolute/new/path/wordhold-v0.5.0-rc.3
 ARCHIVE="$RC_OUTPUT/$RC_STEM.tar.gz"
 RECEIPT="$RC_OUTPUT/$RC_STEM.receipt.json"
 V01_ARCHIVE=/absolute/path/to/retained-Papertrail-0.1.0-darwin-arm64.tar.gz

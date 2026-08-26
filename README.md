@@ -18,10 +18,10 @@ qualification runs on an Apple-Silicon macOS 14 host, so macOS 13 itself is not
 yet a tested compatibility claim.
 
 From the canonical [GitHub Releases](https://github.com/adhd/wordhold/releases)
-page for `v0.5.0-rc.2`, download exactly these two assets:
+page for `v0.5.0-rc.3`, download exactly these two assets:
 
-- `Wordhold-0.5.0-rc.2-darwin-arm64.tar.gz`
-- `Wordhold-0.5.0-rc.2-darwin-arm64.receipt.json`
+- `Wordhold-0.5.0-rc.3-darwin-arm64.tar.gz`
+- `Wordhold-0.5.0-rc.3-darwin-arm64.receipt.json`
 
 Do **not** download GitHub's automatically generated **Source code (zip)** or
 **Source code (tar.gz)**. Those are source snapshots, not the qualified
@@ -148,7 +148,10 @@ Pin the checkout and toolchain before using source as program authority:
 ```sh
 git clone https://github.com/adhd/wordhold.git
 cd wordhold
-git checkout v0.5.0-rc.2
+git checkout v0.5.0-rc.3
+BUN_EXECUTABLE="$(command -v bun)"
+test "$(shasum -a 256 "$BUN_EXECUTABLE" | awk '{print $1}')" = \
+  "1d77af7bfd811aebb7d37bec496a5eed14fe227ded3ab7866d2f39786e8107b6"
 test "$(bun --version)" = "1.3.11"
 test "$(bun --revision)" = "1.3.11+af24e281e"
 test "$(bun -e 'process.stdout.write(Bun.revision)')" = \

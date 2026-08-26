@@ -475,6 +475,91 @@ test("a pt capture receipt drains through the canonical transaction and git comm
   expect(git(root, "log", "-1", "--pretty=%s")).toBe("daemon: drain 1 capture");
 });
 
+test("a daemon drain commits to its corpus despite hostile ambient Git state", async () => {
+  const { root, config } = makeRepo();
+  writeFileSync(
+    join(root, "papertrail.config.json"),
+    JSON.stringify({
+      ...config,
+      capabilities: {
+        workerInbox: false,
+        icloudInbox: false,
+        readingList: false,
+        enrichment: false,
+        digest: false,
+        resurfacing: false,
+      },
+    }),
+  );
+  const decoy = mkdtempSync(join(tmpdir(), "pt-daemon-git-decoy-"));
+  roots.push(decoy);
+  git(decoy, "init", "-q");
+  git(decoy, "config", "user.name", "Papertrail Test");
+  git(decoy, "config", "user.email", "papertrail@example.invalid");
+  git(decoy, "config", "commit.gpgsign", "false");
+  writeFileSync(join(decoy, "README.md"), "decoy repository\n");
+  git(decoy, "add", "README.md");
+  git(decoy, "commit", "-qm", "decoy baseline");
+
+  const hooks = join(decoy, "hostile-hooks");
+  mkdirSync(hooks);
+  const hookMarker = join(decoy, "hook-ran");
+  const hook = join(hooks, "pre-commit");
+  writeFileSync(hook, `#!/bin/sh\ntouch "${hookMarker}"\nexit 1\n`);
+  chmodSync(hook, 0o755);
+  const localHook = join(root, ".git", "hooks", "pre-commit");
+  writeFileSync(localHook, `#!/bin/sh\ntouch "${hookMarker}"\nexit 1\n`);
+  chmodSync(localHook, 0o755);
+  const excludes = join(decoy, "hostile-excludes");
+  writeFileSync(excludes, "items/\n");
+  const globalConfig = join(decoy, "hostile.gitconfig");
+  writeFileSync(
+    globalConfig,
+    `[core]\n\thooksPath = ${hooks}\n\texcludesFile = ${excludes}\n`,
+  );
+
+  const capture = Bun.spawnSync(
+    [
+      "bun",
+      join(import.meta.dir, "..", "cli", "pt.ts"),
+      "capture",
+      "Runtime Git isolation keeps this capture in the intended corpus.",
+    ],
+    { env: { ...process.env, PAPERTRAIL_ROOT: root } },
+  );
+  expect(capture.exitCode).toBe(0);
+
+  const drain = Bun.spawnSync(
+    ["bun", join(import.meta.dir, "..", "daemon", "main.ts")],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        PAPERTRAIL_ROOT: root,
+        GIT_DIR: join(decoy, ".git"),
+        GIT_WORK_TREE: decoy,
+        GIT_INDEX_FILE: join(decoy, ".git", "index"),
+        GIT_CONFIG_GLOBAL: globalConfig,
+        GIT_CONFIG_SYSTEM: globalConfig,
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "core.hooksPath",
+        GIT_CONFIG_VALUE_0: hooks,
+      },
+    },
+  );
+
+  expect(drain.exitCode).toBe(0);
+  expect([
+    ...new Bun.Glob("inbox/raw/*.json").scanSync({ cwd: root }),
+  ]).toEqual([]);
+  expect(git(root, "log", "-1", "--pretty=%s")).toBe(
+    "daemon: drain 1 capture",
+  );
+  expect(git(root, "ls-files", "items")).not.toBe("");
+  expect(git(decoy, "log", "-1", "--pretty=%s")).toBe("decoy baseline");
+  expect(existsSync(hookMarker)).toBe(false);
+});
+
 test("the same Shortcut save through Worker and iCloud becomes one item and one context", async () => {
   const { root, config, inbox } = makeRepo();
   const filePath = join(inbox, "papertrail-shared-save.json");
@@ -867,11 +952,9 @@ test("restart after commit-before-ack interruption replays without loss or dupli
   healthDb.close();
 });
 
-test("a rejected Git commit leaves the affected source unhealthy and unacknowledged", async () => {
+test("a Git write failure leaves the affected source unhealthy and unacknowledged", async () => {
   const { root, config } = makeRepo();
-  const hook = join(root, ".git", "hooks", "pre-commit");
-  writeFileSync(hook, "#!/bin/sh\nexit 1\n");
-  chmodSync(hook, 0o755);
+  writeFileSync(join(root, ".git", "index.lock"), "simulated competing Git writer\n");
   let acknowledged = false;
   const adapter: SourceAdapter = {
     name: "worker_inbox",

@@ -80,6 +80,11 @@ test("sanitized output is a self-contained, target-identified release", () => {
   });
   expect(verified.manifest.runtime).toMatchObject({
     externalCommands: ["git"],
+    lifecycleValidationCommands: [
+      "/usr/bin/sw_vers",
+      "/usr/bin/otool",
+      "/usr/bin/lipo",
+    ],
     bundledRuntime: { name: "bun", version: Bun.version, revision: Bun.revision },
   });
   expect(verified.manifest.signing).toEqual({ kind: "adhoc", verified: true });
@@ -202,6 +207,13 @@ test("format 5 requires legal provenance and exact bundled runtime provenance", 
   });
   expect(() => verifyDistributionArtifact(wrongRuntime))
     .toThrow(/invalid Wordhold artifact build provenance/);
+
+  const incompleteLifecycle = clone("incomplete-lifecycle-provenance");
+  rewriteManifest(incompleteLifecycle, (manifest) => {
+    manifest.runtime!.lifecycleValidationCommands = ["/usr/bin/sw_vers"];
+  });
+  expect(() => verifyDistributionArtifact(incompleteLifecycle))
+    .toThrow(/invalid Wordhold artifact/);
 });
 
 test("verification rejects a release built for another host target", () => {

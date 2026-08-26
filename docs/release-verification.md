@@ -15,7 +15,12 @@ source must be a clean committed `0.5.0` checkout on Apple Silicon, with local
 manifest all resolving to the same revision. Before the tag is pushed, run the
 full suite, application and Worker typechecks, standalone compilation,
 source/history/privacy checks, documentation checks, lifecycle and compatibility
-tests, and focused tests for any changed path.
+tests, focused tests for any changed path, and `bun run audit:dependencies`.
+The dependency audit checks the committed lockfile against the current advisory
+service and blocks on high or critical findings across both the local product
+and optional deployment tooling. CI installs that lockfile with
+`--frozen-lockfile --ignore-scripts` before running the same gate; do not update
+dependencies inside CI or relax the frozen install to make the audit pass.
 
 `bun --no-env-file --config=/dev/null run scripts/release-candidate.ts
 --candidate v0.5.0-rc.N --output NEW_DIRECTORY` is the release producer. The
@@ -34,6 +39,14 @@ revision, internal release id, thin arm64 target, macOS deployment floor, Bun
 version/revision/compiler digest, artifact root, archive name, byte size, and
 SHA-256. Every compiled executable must carry the recorded deployment floor and
 runtime `.env`/`bunfig.toml` autoload must be disabled.
+
+The current producer records ordinary product dependencies such as Git under
+`runtime.externalCommands` and separately records the absolute macOS setup and
+update validators under `runtime.lifecycleValidationCommands`. This keeps
+normal runtime authority distinct from `/usr/bin/sw_vers`, `/usr/bin/otool`,
+and `/usr/bin/lipo`, which inspect the host and packaged Mach-O files before
+program mutation. Optional integration commands remain documented at their
+integration boundary rather than being implied by the core artifact manifest.
 
 The lower-level `build:distribution` and `package:distribution` commands remain
 development primitives. Their output is not a release candidate unless it has

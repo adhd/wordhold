@@ -56,7 +56,7 @@ test("public cold-start documentation has valid links and preserves private-data
   );
   expect(byPath.get("README.md")).toContain("./wordhold update");
   expect(byPath.get("README.md")).toContain(
-    "Wordhold-0.5.0-rc.2-darwin-arm64.tar.gz",
+    "Wordhold-0.5.0-rc.3-darwin-arm64.tar.gz",
   );
   expect(byPath.get("README.md")).toContain("Source code (tar.gz)");
   expect(byPath.get("README.md")).toContain("macOS 13 as their deployment floor");
@@ -64,6 +64,15 @@ test("public cold-start documentation has valid links and preserves private-data
   expect(byPath.get("README.md")).toContain("bun install --frozen-lockfile --ignore-scripts");
   expect(byPath.get("README.md")).toContain("bun run verify:licenses");
   expect(byPath.get("README.md")).toContain("af24e281ebacd6ac77c0f14b4206599cf4ae1c9f");
+  expect(byPath.get("README.md")).toContain(
+    'BUN_EXECUTABLE="$(command -v bun)"',
+  );
+  expect(byPath.get("README.md")).toContain(
+    'shasum -a 256 "$BUN_EXECUTABLE"',
+  );
+  expect(byPath.get("README.md")).toContain(
+    "1d77af7bfd811aebb7d37bec496a5eed14fe227ded3ab7866d2f39786e8107b6",
+  );
   expect(byPath.get("docs/how-it-works.md")).toContain(
     "do not also add it to",
   );
@@ -82,8 +91,17 @@ test("public cold-start documentation has valid links and preserves private-data
   expect(byPath.get("docs/setup.md")).toContain(
     'codesign --verify --strict "$RELEASE/wordhold"',
   );
+  expect(byPath.get("docs/setup.md")).toContain("/usr/bin/sw_vers");
+  expect(byPath.get("docs/setup.md")).toContain("/usr/bin/otool");
+  expect(byPath.get("docs/setup.md")).toContain("/usr/bin/lipo");
   expect(byPath.get("docs/setup.md")).not.toContain("spctl --master-disable");
   expect(byPath.get("docs/setup.md")).toContain('"$WORDHOLD" connect codex');
+  expect(byPath.get("docs/setup.md")).toMatch(
+    /Configure enrichment, digest, and resurfacing\s+before this command/,
+  );
+  expect(byPath.get("docs/setup.md")).toContain(
+    'rerun `"$WORDHOLD" schedule` to reconcile the owned jobs',
+  );
   expect(byPath.get("docs/setup.md")).toContain('"$WORDHOLD" iphone setup');
   expect(byPath.get("docs/setup.md")).toContain("Save to Papertrail —");
   expect(byPath.get("docs/setup.md")).toContain("Online.shortcut");
@@ -160,6 +178,9 @@ test("public cold-start documentation has valid links and preserves private-data
   expect(byPath.get("docs/release-verification.md")).toContain(
     "bun --no-env-file --config=/dev/null run scripts/release-candidate.ts",
   );
+  expect(byPath.get("docs/release-verification.md")).toContain(
+    "lifecycleValidationCommands",
+  );
   expect(text).not.toContain("--config /dev/null");
   expect(byPath.get("docs/operations.md")).toContain(
     "ambient `node_modules` is not release input",
@@ -214,6 +235,9 @@ test("public cold-start documentation has valid links and preserves private-data
     "Historical withdrawn attempts",
   );
   expect(byPath.get("docs/architecture.md")).toContain("`iphoneOnline` state");
+  expect(byPath.get("docs/architecture.md")).toContain(
+    "clears inherited `GIT_*` state",
+  );
   expect(byPath.get("docs/release-verification.md")).toContain(
     "0.4.0 Save to Papertrail — Online — bounded compatibility qualification",
   );

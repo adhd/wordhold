@@ -8,6 +8,7 @@ import {
 import { isAbsolute, join, resolve } from "node:path";
 import { atomicWriteFile } from "./atomic.ts";
 import { openDb } from "./db.ts";
+import { spawnGitSync } from "./git.ts";
 
 const SAFE_CONFIG = {
   capabilities: {
@@ -47,30 +48,8 @@ logs/oversized-worker-bodies-seen.txt
 .DS_Store
 `;
 
-function gitEnvironment(): Record<string, string | undefined> {
-  const env = { ...process.env };
-  for (const name of [
-    "GIT_DIR",
-    "GIT_WORK_TREE",
-    "GIT_INDEX_FILE",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    "GIT_COMMON_DIR",
-    "GIT_CONFIG",
-    "GIT_CONFIG_GLOBAL",
-    "GIT_CONFIG_SYSTEM",
-    "GIT_CONFIG_COUNT",
-  ]) {
-    delete env[name];
-  }
-  return env;
-}
-
 function runGit(root: string, args: string[], allowOne = false): number {
-  const result = Bun.spawnSync(
-    ["git", "-c", "core.hooksPath=/dev/null", ...args],
-    { cwd: root, env: gitEnvironment() },
-  );
+  const result = spawnGitSync(root, args);
   if (result.exitCode !== 0 && !(allowOne && result.exitCode === 1)) {
     throw new Error(
       `git ${args[0]} failed: ${new TextDecoder().decode(result.stderr).trim()}`,
@@ -151,8 +130,7 @@ export interface InitializedDataRoot {
 export function initializeDataRoot(rawRoot: string): InitializedDataRoot {
   let gitAvailable = false;
   try {
-    gitAvailable =
-      Bun.spawnSync(["git", "--version"], { env: gitEnvironment() }).exitCode === 0;
+    gitAvailable = spawnGitSync(undefined, ["--version"]).exitCode === 0;
   } catch {
     gitAvailable = false;
   }

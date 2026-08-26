@@ -18,6 +18,7 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { homedir } from "node:os";
 import {
   ARTIFACT_EXECUTABLES,
+  ARTIFACT_LIFECYCLE_VALIDATION_COMMANDS,
   ARTIFACT_MANIFEST_PATH,
   WORDHOLD_ARTIFACT_FORMAT,
   WORDHOLD_MINIMUM_MACOS,
@@ -618,6 +619,7 @@ export function buildDistribution(
       executables: [...ARTIFACT_EXECUTABLES],
       runtime: {
         externalCommands: ["git"],
+        lifecycleValidationCommands: [...ARTIFACT_LIFECYCLE_VALIDATION_COMMANDS],
         bundledRuntime: {
           name: "bun" as const,
           version: Bun.version,

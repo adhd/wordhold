@@ -5,9 +5,40 @@ interface GitResult {
   stderr: string;
 }
 
+// Product-owned Git operations must target the explicit corpus root regardless
+// of the shell, agent, or launch environment that started Wordhold. Git reads
+// many GIT_* variables plus user/system config before considering cwd; clearing
+// those inputs and disabling hooks keeps status/add/commit local and non-
+// interactive while retaining the corpus repository's own identity config.
+function gitEnvironment(): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {};
+  for (const [name, value] of Object.entries(process.env)) {
+    if (!name.startsWith("GIT_")) env[name] = value;
+  }
+  env.GIT_CONFIG_GLOBAL = "/dev/null";
+  env.GIT_CONFIG_SYSTEM = "/dev/null";
+  env.GIT_CONFIG_NOSYSTEM = "1";
+  return env;
+}
+
+function gitCommand(args: string[]): string[] {
+  return ["git", "-c", "core.hooksPath=/dev/null", ...args];
+}
+
+export function spawnGitSync(
+  repoRoot: string | undefined,
+  args: string[],
+): ReturnType<typeof Bun.spawnSync> {
+  return Bun.spawnSync(gitCommand(args), {
+    ...(repoRoot ? { cwd: repoRoot } : {}),
+    env: gitEnvironment(),
+  });
+}
+
 async function gitOutput(repoRoot: string, args: string[]): Promise<string> {
-  const proc = Bun.spawn(["git", ...args], {
+  const proc = Bun.spawn(gitCommand(args), {
     cwd: repoRoot,
+    env: gitEnvironment(),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -21,8 +52,9 @@ async function gitOutput(repoRoot: string, args: string[]): Promise<string> {
 }
 
 async function git(repoRoot: string, args: string[]): Promise<GitResult> {
-  const proc = Bun.spawn(["git", ...args], {
+  const proc = Bun.spawn(gitCommand(args), {
     cwd: repoRoot,
+    env: gitEnvironment(),
     stdout: "ignore",
     stderr: "pipe",
   });

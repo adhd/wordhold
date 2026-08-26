@@ -11,12 +11,18 @@ automated packaged gate runs on Apple-Silicon macOS 14; macOS 13 itself is not
 yet a tested compatibility claim. Never use another person's private corpus
 repository, clone, bundle, or history as program source.
 
+Setup and update also require the macOS validators `/usr/bin/sw_vers`,
+`/usr/bin/otool`, and `/usr/bin/lipo`. The current artifact declares those
+exact lifecycle commands in its manifest, and the launcher fails before
+mutation if they are unavailable or if their results disagree with the
+artifact's claimed host compatibility.
+
 Open the canonical public
-[GitHub release](https://github.com/adhd/wordhold/releases/tag/v0.5.0-rc.2),
+[GitHub release](https://github.com/adhd/wordhold/releases/tag/v0.5.0-rc.3),
 expand **Assets**, and download exactly:
 
-- `Wordhold-0.5.0-rc.2-darwin-arm64.tar.gz`
-- `Wordhold-0.5.0-rc.2-darwin-arm64.receipt.json`
+- `Wordhold-0.5.0-rc.3-darwin-arm64.tar.gz`
+- `Wordhold-0.5.0-rc.3-darwin-arm64.receipt.json`
 
 Do not choose GitHub's automatically generated **Source code (zip)** or
 **Source code (tar.gz)**. They are unqualified source snapshots, not the
@@ -37,7 +43,7 @@ below is for the original compressed asset.
 Run this block from Terminal after both assets finish downloading:
 
 ```sh
-RC="0.5.0-rc.2"
+RC="0.5.0-rc.3"
 ARCHIVE="$HOME/Downloads/Wordhold-$RC-darwin-arm64.tar.gz"
 RECEIPT="$HOME/Downloads/Wordhold-$RC-darwin-arm64.receipt.json"
 UNPACK="$HOME/Downloads/Wordhold-$RC-unpacked"
@@ -174,7 +180,8 @@ Codex or Hermes may send a question and the specific bounded evidence returned b
 
 ## 3. Scheduled local daemon (optional)
 
-Opt into scheduling explicitly:
+Opt into scheduling explicitly. Configure enrichment, digest, and resurfacing
+before this command if you want their jobs installed:
 
 ```sh
 "$WORDHOLD" schedule
@@ -187,6 +194,9 @@ capability is disabled. Every job uses umask `077`. Launchd is a separate device
 integration, not part of default setup. Its owner-only receipt hashes the
 installed definitions. A verified update refreshes owned scheduled binaries and
 definitions.
+
+If you enable, disable, or finish configuring any of those capabilities later,
+rerun `"$WORDHOLD" schedule` to reconcile the owned jobs.
 
 To remove only scheduling:
 

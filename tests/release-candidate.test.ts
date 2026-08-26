@@ -54,12 +54,12 @@ function manifest(overrides: Partial<ArtifactManifest> = {}): ArtifactManifest {
 }
 
 test("release candidate identity binds version, RC, and supported target", () => {
-  expect(releaseCandidateIdentity("v0.5.0-rc.2", manifest())).toEqual({
-    candidate: "v0.5.0-rc.2",
+  expect(releaseCandidateIdentity("v0.5.0-rc.3", manifest())).toEqual({
+    candidate: "v0.5.0-rc.3",
     version: "0.5.0",
-    artifactRootName: "Wordhold-0.5.0-rc.2-darwin-arm64",
-    archiveName: "Wordhold-0.5.0-rc.2-darwin-arm64.tar.gz",
-    receiptName: "Wordhold-0.5.0-rc.2-darwin-arm64.receipt.json",
+    artifactRootName: "Wordhold-0.5.0-rc.3-darwin-arm64",
+    archiveName: "Wordhold-0.5.0-rc.3-darwin-arm64.tar.gz",
+    receiptName: "Wordhold-0.5.0-rc.3-darwin-arm64.receipt.json",
   });
   expect(() => releaseCandidateIdentity("v0.5.1-rc.1", manifest()))
     .toThrow(/does not match product version/);

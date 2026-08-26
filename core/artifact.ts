@@ -29,6 +29,11 @@ const LEGACY_ARTIFACT_EXECUTABLES = PAPERTRAIL_ARTIFACT_EXECUTABLES.filter(
 export const ARTIFACT_MANIFEST_PATH = ".papertrail-artifact.json";
 export const WORDHOLD_ARTIFACT_FORMAT = 5 as const;
 export const WORDHOLD_MINIMUM_MACOS = "13.0";
+export const ARTIFACT_LIFECYCLE_VALIDATION_COMMANDS = [
+  "/usr/bin/sw_vers",
+  "/usr/bin/otool",
+  "/usr/bin/lipo",
+] as const;
 
 // The manifest filename and product discriminator are durable pre-0.5
 // lifecycle identifiers. Format 4 adds the Wordhold entrypoint while keeping
@@ -55,6 +60,9 @@ export interface ArtifactManifest {
   files: Record<string, string>;
   runtime?: {
     externalCommands: string[];
+    // System validators used by setup/update before any program mutation.
+    // Optional capability commands remain documented at their integration edge.
+    lifecycleValidationCommands?: string[];
     bundledRuntime: { name: "bun"; version: string; revision?: string };
     directPackages: Record<string, string>;
   };
@@ -203,6 +211,11 @@ function manifestShape(value: unknown): ArtifactManifest {
     (
       !manifest.runtime ||
       JSON.stringify(manifest.runtime.externalCommands) !== JSON.stringify(["git"]) ||
+      (
+        manifest.runtime.lifecycleValidationCommands !== undefined &&
+        JSON.stringify(manifest.runtime.lifecycleValidationCommands) !==
+          JSON.stringify(ARTIFACT_LIFECYCLE_VALIDATION_COMMANDS)
+      ) ||
       manifest.runtime.bundledRuntime?.name !== "bun" ||
       typeof manifest.runtime.bundledRuntime.version !== "string" ||
       manifest.runtime.bundledRuntime.version !== manifest.build.bunVersion ||

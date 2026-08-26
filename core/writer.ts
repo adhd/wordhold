@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { atomicWriteFile } from "./atomic.ts";
-import { commitPaths } from "./git.ts";
+import { commitPaths, spawnGitSync } from "./git.ts";
 import { ensurePrivateDir } from "./private-fs.ts";
 
 export type WriterOwner = "daemon" | "enrichment" | "resurface";
@@ -80,10 +80,13 @@ function allOtherClaims(
 }
 
 function pathDirty(repoRoot: string, path: string): boolean {
-  const result = Bun.spawnSync(
-    ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", path],
-    { cwd: repoRoot },
-  );
+  const result = spawnGitSync(repoRoot, [
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+    "--",
+    path,
+  ]);
   if (result.exitCode !== 0) {
     throw new Error(`git status failed while claiming ${path}`);
   }

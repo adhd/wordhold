@@ -25,6 +25,7 @@
     "release:verify-download": "bun run scripts/verify-release-download.ts",
     "licenses:generate": "bun run scripts/verify-third-party-licenses.ts --generate",
     "verify:licenses": "bun run scripts/verify-third-party-licenses.ts",
+    "audit:dependencies": "bun audit --audit-level=high",
     "lifecycle": "bun run scripts/lifecycle.ts",
     "verify:seed-agents": "bun run scripts/seed-synthetic-agent-proof.ts",
     "typecheck": "tsc --noEmit",
@@ -49,6 +50,6 @@
     "@cloudflare/workers-types": "^4.20250705.0",
     "bun-types": "^1.3.11",
     "typescript": "7.0.2",
-    "wrangler": "^4.30.0"
+    "wrangler": "^4.125.0"
   }
 }
