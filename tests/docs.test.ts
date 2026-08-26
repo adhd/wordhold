@@ -185,6 +185,9 @@ test("public cold-start documentation has valid links and preserves private-data
   expect(byPath.get("docs/operations.md")).toContain(
     "ambient `node_modules` is not release input",
   );
+  expect(byPath.get("docs/operations.md")).toContain(
+    "bun run audit:dependencies",
+  );
   expect(byPath.get("docs/operations.md")).toContain("release:verify-download");
   expect(byPath.get("docs/operations.md")).toContain("env -u GH_TOKEN -u GITHUB_TOKEN curl");
   expect(byPath.get("docs/operations.md")).toContain("isImmutable");

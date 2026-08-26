@@ -94,6 +94,7 @@ V01_SHA256=d4e24a228a67de6b3494ce9c2f3bb056528f51952f7022b0b36c381c7be590f1
 
 # In the reviewed canonical worktree, every local gate and status must be clean.
 bun run verify:source
+bun run audit:dependencies
 bun run verify:licenses
 bun test
 bun run typecheck
