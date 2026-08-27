@@ -7,6 +7,10 @@ details, permissions, endpoints, and account resource names belong only in
 private operator evidence. Historical test totals are not evidence for a new
 candidate and are intentionally not repeated here.
 
+This is a maintainer document. Installation and routine recovery belong in
+[Setup](setup.md) and [Operations](operations.md); ordinary users never run the
+commands below.
+
 ## v0.5 release-candidate gate
 
 Finish code, tests, and documentation before selecting an RC. The candidate
@@ -51,6 +55,149 @@ integration boundary rather than being implied by the core artifact manifest.
 The lower-level `build:distribution` and `package:distribution` commands remain
 development primitives. Their output is not a release candidate unless it has
 gone through the RC producer and the remote qualification below.
+
+### Maintainer command checklist
+
+Choose a new RC identifier and fresh paths before running anything. Published
+releases are immutable: never reuse an existing tag or attempt to replace its
+assets. The retained v0.1 archive and digest are the compatibility input
+documented below.
+
+```sh
+REPOSITORY=adhd/wordhold
+RC=REPLACE_WITH_NEW_RC
+RC_STEM="Wordhold-${RC#v}-darwin-arm64"
+SOURCE=/absolute/new/path/wordhold-rc-source
+RC_OUTPUT=/absolute/new/path/wordhold-rc-output
+ARCHIVE="$RC_OUTPUT/$RC_STEM.tar.gz"
+RECEIPT="$RC_OUTPUT/$RC_STEM.receipt.json"
+V01_ARCHIVE=/absolute/path/to/retained-Papertrail-0.1.0-darwin-arm64.tar.gz
+V01_SHA256=d4e24a228a67de6b3494ce9c2f3bb056528f51952f7022b0b36c381c7be590f1
+```
+
+From the reviewed canonical worktree, run the local gate, confirm a clean
+status, push `main`, and require CI success for that exact revision before
+creating the tag:
+
+```sh
+(
+set -eu
+RC_NUMBER="${RC#v0.5.0-rc.}"
+test "$RC_NUMBER" != "$RC"
+case "$RC_NUMBER" in ''|*[!0-9]*) exit 1 ;; esac
+test "$RC_NUMBER" -ge 1
+LOCAL_TAGS="$(git tag --list "$RC")"
+REMOTE_TAGS="$(git ls-remote --tags origin "refs/tags/$RC" "refs/tags/$RC^{}")"
+test -z "$LOCAL_TAGS"
+test -z "$REMOTE_TAGS"
+
+bun run verify:source
+bun run audit:dependencies
+bun run verify:licenses
+bun test
+bun run typecheck
+bun run worker:typecheck
+bun run compile
+test -z "$(git status --porcelain=v1 --untracked-files=all)"
+REVISION="$(git rev-parse HEAD)"
+git push origin main
+
+RUN_ID=
+for ATTEMPT in $(jot 30); do
+  RUN_ID="$(gh run list --repo "$REPOSITORY" --workflow CI --commit "$REVISION" \
+    --event push --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+  test -z "$RUN_ID" || break
+  sleep 2
+done
+test -n "$RUN_ID"
+gh run watch "$RUN_ID" --repo "$REPOSITORY" --exit-status
+test "$(gh run view "$RUN_ID" --repo "$REPOSITORY" --json headSha --jq .headSha)" = "$REVISION"
+test "$(gh run view "$RUN_ID" --repo "$REPOSITORY" --json conclusion --jq .conclusion)" = success
+git tag -a "$RC" -m "Wordhold $RC"
+git push origin "$RC"
+)
+```
+
+Build and qualify from a new clone, never from the development worktree.
+Ambient `node_modules` is not release input; the producer installs locked
+production dependencies inside its isolated build root.
+
+```sh
+(
+set -eu
+git clone --branch main https://github.com/adhd/wordhold.git "$SOURCE"
+cd "$SOURCE"
+git fetch origin tag "$RC"
+bun install --frozen-lockfile --ignore-scripts
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+test "$(git rev-parse HEAD)" = "$(git rev-parse "$RC^{commit}")"
+bun --no-env-file --config=/dev/null run scripts/release-candidate.ts \
+  --candidate "$RC" --output "$RC_OUTPUT"
+WORDHOLD_RELEASE_ARTIFACT="$RC_OUTPUT/$RC_STEM" \
+  PAPERTRAIL_V01_ARCHIVE="$V01_ARCHIVE" \
+  bun test tests/guided-setup.test.ts tests/v01-upgrade.test.ts
+)
+```
+
+Enable GitHub release immutability before creating a draft. Upload only the
+archive and receipt, then download them into a new empty directory and qualify
+those downloaded bytes:
+
+```sh
+(
+set -eu
+gh api --method PUT -H "X-GitHub-Api-Version: 2026-03-10" \
+  "repos/$REPOSITORY/immutable-releases"
+gh api -H "X-GitHub-Api-Version: 2026-03-10" \
+  "repos/$REPOSITORY/immutable-releases"
+gh release create "$RC" --repo "$REPOSITORY" --verify-tag --draft \
+  --prerelease --latest=false --title "Wordhold $RC" --notes-file /path/to/release-notes.md
+gh release upload "$RC" "$ARCHIVE" "$RECEIPT" --repo "$REPOSITORY"
+
+DRAFT_DOWNLOAD=/absolute/new/empty/draft-download
+test ! -e "$DRAFT_DOWNLOAD"
+mkdir -m 700 "$DRAFT_DOWNLOAD"
+gh release download "$RC" --repo "$REPOSITORY" --dir "$DRAFT_DOWNLOAD" \
+  --pattern "$RC_STEM.tar.gz" --pattern "$RC_STEM.receipt.json"
+cmp "$ARCHIVE" "$DRAFT_DOWNLOAD/$RC_STEM.tar.gz"
+cmp "$RECEIPT" "$DRAFT_DOWNLOAD/$RC_STEM.receipt.json"
+bun run release:verify-download -- \
+  --release-state draft --candidate "$RC" \
+  --archive "$DRAFT_DOWNLOAD/$RC_STEM.tar.gz" \
+  --receipt "$DRAFT_DOWNLOAD/$RC_STEM.receipt.json" \
+  --v01-archive "$V01_ARCHIVE" --v01-sha256 "$V01_SHA256"
+)
+```
+
+Publish only after the draft download passes. Confirm immutable metadata, then
+perform a second fresh download through public HTTPS with GitHub credential
+variables removed:
+
+```sh
+(
+set -eu
+gh release edit "$RC" --repo "$REPOSITORY" --draft=false --prerelease
+gh release view "$RC" --repo "$REPOSITORY" \
+  --json tagName,isDraft,isPrerelease,isImmutable,assets
+
+FINAL_DOWNLOAD=/absolute/new/empty/published-download
+test ! -e "$FINAL_DOWNLOAD"
+mkdir -m 700 "$FINAL_DOWNLOAD"
+env -u GH_TOKEN -u GITHUB_TOKEN curl -fL --proto '=https' --tlsv1.2 \
+  -o "$FINAL_DOWNLOAD/$RC_STEM.tar.gz" \
+  "https://github.com/$REPOSITORY/releases/download/$RC/$RC_STEM.tar.gz"
+env -u GH_TOKEN -u GITHUB_TOKEN curl -fL --proto '=https' --tlsv1.2 \
+  -o "$FINAL_DOWNLOAD/$RC_STEM.receipt.json" \
+  "https://github.com/$REPOSITORY/releases/download/$RC/$RC_STEM.receipt.json"
+cmp "$ARCHIVE" "$FINAL_DOWNLOAD/$RC_STEM.tar.gz"
+cmp "$RECEIPT" "$FINAL_DOWNLOAD/$RC_STEM.receipt.json"
+bun run release:verify-download -- \
+  --release-state published --candidate "$RC" \
+  --archive "$FINAL_DOWNLOAD/$RC_STEM.tar.gz" \
+  --receipt "$FINAL_DOWNLOAD/$RC_STEM.receipt.json" \
+  --v01-archive "$V01_ARCHIVE" --v01-sha256 "$V01_SHA256"
+)
+```
 
 ## Immutable remote qualification
 

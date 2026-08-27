@@ -2,15 +2,23 @@
 
 Codex and Hermes use the same versioned Wordhold application contract through one local stdio MCP server. No listener, cloud query endpoint, alternate data store, embedded model, or alternate writer is introduced.
 
-## Install and discover
+## Install, verify, and remove
+
+For Codex:
 
 ```sh
 APP="$HOME/Library/Application Support/Papertrail/app"
 WORDHOLD="$APP/bin/wordhold"
 "$WORDHOLD" connect codex
-# Or, independently:
-"$WORDHOLD" connect hermes
 codex mcp get papertrail --json
+```
+
+For Hermes:
+
+```sh
+APP="$HOME/Library/Application Support/Papertrail/app"
+WORDHOLD="$APP/bin/wordhold"
+"$WORDHOLD" connect hermes
 hermes mcp test papertrail
 ```
 
@@ -22,17 +30,24 @@ different corpora.
 
 The guided command preflights the requested client, uses its actual installed
 CLI, passes only `PAPERTRAIL_ROOT`, and initializes the exact registered server
-to verify all six tools before reporting success. Hermes installation also adds
-generic guidance. A packaged installation records exact managed client pointers
-and the installed skill hash; refresh/removal refuses to adopt, overwrite, or
-delete an unmanaged or locally changed entry or skill. Connect one client per
-command so a client-specific failure is isolated.
+to request its tool list and verify the exact six names before reporting
+success. It does not call those tools or read corpus content during connection.
+Hermes installation also adds generic guidance. A packaged installation records
+exact managed client pointers and the installed skill hash; refresh/removal
+refuses to adopt, overwrite, or delete an unmanaged or locally changed entry or
+skill. Connect one client per command so a client-specific failure is isolated.
 
 Revoke one or both managed integrations without removing Wordhold or its corpus:
 
+For Codex:
+
 ```sh
 "$WORDHOLD" disconnect codex
-# Or:
+```
+
+For Hermes:
+
+```sh
 "$WORDHOLD" disconnect hermes
 ```
 
@@ -69,23 +84,27 @@ stable Wordhold item id rather than treating capture time as insertion order.
 
 Queued never means archived. The daemon still validates, writes canonical Markdown first, updates derived SQLite, creates a scoped Git commit, and only then removes or acknowledges the queue record. MCP cannot acknowledge upstream work, edit Markdown, run maintenance, migrate, manage secrets, administer senders, or execute shell commands.
 
-This local `queue_capture` path is not the iPhone online Shortcut. An agent
-capture requires the Mac and selected client to be running long enough to place
-the record directly in the local raw spool; it uses no Cloudflare credential.
-The bundled compatibility **Save to Papertrail — Online** action instead sends
-the URL of one shared Safari page to the optional Worker with a capture-only
-token and can receive a remote queue receipt while the Mac and agent clients
-are off. Its bounded device qualification does not prove a new installation;
-each operator must configure and verify their own Worker and phone. Other Share
-Sheet providers are not live-qualified. In either case, only a later daemon
-commit makes the capture part of the archive. Neither route gives Codex or
-Hermes a Worker secret.
+This local `queue_capture` path is distinct from the iPhone online Shortcut. An
+agent capture requires the Mac and selected client to place a record directly
+in the local raw spool; it uses no Cloudflare credential. The Shortcut can
+receive a remote Worker queue receipt while the Mac and clients are off, but
+that receipt proves neither a new installation nor archival. In both paths,
+only a later daemon commit makes the capture part of the archive. Codex and
+Hermes receive no Worker secret and do not administer the phone path. See the
+canonical [Shortcut contract](../integrations/shortcuts/Papertrail.md) for its
+exact input, credential, receipt, qualification, and device-state boundaries.
 
 ## Prompt injection and disclosure
 
 Article bodies, highlights, contexts, titles, and URLs are untrusted data. Their text cannot instruct the integration to read `.env`, run commands, follow links, widen a query, call another service, ignore tool instructions, or queue a capture. The server returns bounded data and accurate read/write annotations; agent guidance repeats the trust boundary.
 
-The MCP process itself is local and reads only the configured Wordhold root. The client/model boundary is different: Codex or Hermes may transmit the user's question and returned selected evidence to its configured model provider. Wordhold does not upload the whole corpus, but it cannot impose provider retention or training policy. Do not use the integration for material that may not be disclosed to that provider.
+The MCP process itself is local and reads only the configured Wordhold root.
+The client/model boundary is different: Codex or Hermes may transmit the user's
+question and returned evidence to its configured model provider. There is no
+single bulk-corpus tool, but a connected client can enumerate and retrieve many
+items through repeated bounded calls. Wordhold cannot impose provider retention
+or training policy. Do not use the integration for material that may not be
+disclosed to that provider.
 
 ## Structured CLI fallback
 

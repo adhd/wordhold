@@ -1,11 +1,15 @@
 # Domain documentation
 
-Wordhold is a single-context repository.
+Wordhold is a single-context repository. `README.md` owns the supported product
+boundary and documentation map; `docs/architecture.md` owns the implemented
+authority, durability, and trust-boundary contracts.
 
-Before engineering exploration, read root `CONTEXT.md` when present and the
-ADRs under `docs/adr/` that affect the area being changed. If these files do not
-exist, proceed without proposing placeholder documents; create them only when a
-real domain term or architectural decision needs durable treatment.
+Before engineering exploration, read those two entry documents plus the
+accepted decisions under `docs/decisions/` that affect the area being changed.
+The current decision index is the directory itself; do not create placeholder
+domain documents.
 
-Use the vocabulary defined in `CONTEXT.md`. Surface any conflict with an ADR
-instead of silently overriding it.
+Add a numbered decision under `docs/decisions/` only when a durable architectural
+tradeoff cannot be owned clearly by `docs/architecture.md`. Surface conflicts
+with an accepted decision instead of silently overriding it, and add any new
+decision to the `README.md` documentation map in the same coherent change.

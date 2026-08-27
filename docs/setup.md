@@ -1,8 +1,16 @@
 # Setup
 
-This guide starts with a healthy local-only installation. Optional cloud, device, model, and messaging capabilities come later and remain disabled until their explicit flag and required configuration are both present.
+This guide starts with a healthy local-only installation. Optional cloud,
+device, model, and messaging capabilities come later and remain disabled until
+their explicit flag and required configuration are both present.
+
+Follow the local path in order: check prerequisites, verify the two release
+files, choose fresh setup or update, and run the smoke test. Stop there unless
+you want one of the optional integrations in sections 2–4.
 
 ## 1. Acquire, verify, and install local Wordhold
+
+### Check the Mac and Git
 
 Prerequisites are an Apple-Silicon Mac running macOS 13 or newer and Git. Bun is
 needed to run, develop, or build from source, not to install or run the compiled
@@ -11,11 +19,24 @@ automated packaged gate runs on Apple-Silicon macOS 14; macOS 13 itself is not
 yet a tested compatibility claim. Never use another person's private corpus
 repository, clone, bundle, or history as program source.
 
+Confirm Git before downloading Wordhold:
+
+```sh
+git --version
+```
+
+Any successful `git version …` result is sufficient. If macOS reports that Git
+is missing, run `xcode-select --install`, complete Apple's Command Line Tools
+installation, and rerun `git --version`. Setup also checks Git before creating
+either the program or private data root.
+
 Setup and update also require the macOS validators `/usr/bin/sw_vers`,
 `/usr/bin/otool`, and `/usr/bin/lipo`. The current artifact declares those
 exact lifecycle commands in its manifest, and the launcher fails before
 mutation if they are unavailable or if their results disagree with the
 artifact's claimed host compatibility.
+
+### Download and verify the release
 
 Open the canonical public
 [GitHub release](https://github.com/adhd/wordhold/releases/tag/v0.5.0-rc.3),
@@ -88,6 +109,8 @@ path](../README.md#run-or-develop-from-source). This candidate requires Apple Si
 or newer; automated qualification currently runs on macOS 14. One observed
 machine does not establish broad macOS compatibility.
 
+### Install or update
+
 Defaults:
 
 - program releases: `~/Library/Application Support/Papertrail/app/releases/`
@@ -104,15 +127,21 @@ Run exactly one of these adjacent branches from the verified release.
 For a Mac with no Papertrail or Wordhold installation:
 
 ```sh
+(
+set -eu
 cd "$RELEASE"
 ./wordhold setup
+)
 ```
 
 For an existing Papertrail or Wordhold installation:
 
 ```sh
+(
+set -eu
 cd "$RELEASE"
 ./wordhold update
+)
 ```
 
 If the existing installation used a custom program root, pass the exact same
@@ -127,11 +156,14 @@ disabled, an independent private Git repository, canonical journals/tag
 vocabulary, and a rebuildable empty index. It performs no Worker request, model
 call, message, cloud mutation, or device access.
 
+### Verify the local core
+
 Verify the local path. If you selected a custom program root, put that exact
 root in `INSTALL_ROOT` instead of the default below:
 
 ```sh
 INSTALL_ROOT="$HOME/Library/Application Support/Papertrail/app"
+DATA_ROOT="$HOME/Library/Application Support/Papertrail/data"
 WORDHOLD="$INSTALL_ROOT/bin/wordhold"
 
 "$WORDHOLD" capture 'https://www.iana.org/help/example-domains'
@@ -147,8 +179,9 @@ id, and whether a body is available; replace `ITEM_ID_FROM_RECENT` with that id
 to inspect the canonical Markdown. A body may honestly be unavailable when the
 site cannot be fetched. A local-only config is healthy after the daemon records
 its core source/job run; disabled
-optional capabilities are not failures. Deleting `papertrail.db*`, running
-`"$WORDHOLD" rebuild`, and repeating `recent` should preserve the same item id.
+optional capabilities are not failures. Database-loss recovery is not part of
+this first smoke test; the exact, safely scoped procedure is in
+[Operations](operations.md#rebuild-after-sqlite-loss-or-disagreement).
 
 This completes the local core. Sections 2–4 are optional integrations, not
 prerequisites or additional acceptance steps.
@@ -162,26 +195,42 @@ second corpus or parallel machine state.
 
 ## 2. Codex and Hermes integration (optional)
 
-Use the installed guided command. Connect each client independently:
+Use the installed guided command. If you followed a direct link to this
+section, set the launcher first; replace the default when setup used a custom
+program root:
+
+```sh
+WORDHOLD="$HOME/Library/Application Support/Papertrail/app/bin/wordhold"
+test -x "$WORDHOLD"
+```
+
+Connect only the client wanted.
+
+For Codex:
 
 ```sh
 "$WORDHOLD" connect codex
-# Or:
+```
+
+For Hermes:
+
+```sh
 "$WORDHOLD" connect hermes
 ```
 
 This adds a local stdio `papertrail` MCP server to the selected real client,
-installs generic Hermes guidance when appropriate, and probes the six tools
-before reporting success. A missing client is an actionable skipped state. It
-sends no corpus content during installation and stores no Wordhold credential.
-Follow [integrations.md](integrations.md) for use and selective removal.
+installs generic Hermes guidance when appropriate, starts the registered
+server, and verifies its exact six advertised tool names before reporting
+success. It does not invoke the tools or read corpus content during connection.
+A missing client is an actionable skipped state. Installation stores no
+Wordhold credential. Follow [integrations.md](integrations.md) for use and
+selective removal.
 
 Codex or Hermes may send a question and the specific bounded evidence returned by an invoked tool to its configured model provider. Do not enable the integration if that disclosure is unacceptable.
 
 ## 3. Scheduled local daemon (optional)
 
-Opt into scheduling explicitly. Configure enrichment, digest, and resurfacing
-before this command if you want their jobs installed:
+Opt into the core daemon schedule explicitly:
 
 ```sh
 "$WORDHOLD" schedule
@@ -195,7 +244,7 @@ integration, not part of default setup. Its owner-only receipt hashes the
 installed definitions. A verified update refreshes owned scheduled binaries and
 definitions.
 
-If you enable, disable, or finish configuring any of those capabilities later,
+If you enable, disable, or finish configuring any optional capability later,
 rerun `"$WORDHOLD" schedule` to reconcile the owned jobs.
 
 To remove only scheduling:
@@ -211,15 +260,38 @@ It preserves remote Worker rows and legacy iCloud evidence and cannot edit the
 phone Shortcut. Remove the Shortcut and revoke its capture credential separately
 if new online captures should stop after uninstall.
 
-If migrating from a pre-distribution installation with another launch-label prefix, remove or boot out those old user jobs before loading `app.papertrail.*`; never leave both schedules active. Full Disk Access is needed only when Reading List is enabled. Grant it to the exact compiled daemon path printed by the installer. Scheduling leaves the stable executable untouched when an update ships byte-identical daemon code, avoiding unnecessary authorization churn. Always recheck health after an update; if daemon bytes changed or Reading List reports `EPERM`/`EACCES`, re-grant FDA.
+If migrating from a pre-distribution installation with another launch-label
+prefix, remove or boot out those old user jobs before loading
+`app.papertrail.*`; never leave both schedules active. Full Disk Access is
+needed only when Reading List is enabled. Scheduling preserves the stable
+daemon executable when an update ships byte-identical bytes, avoiding needless
+permission churn.
 
 ## 4. Configure optional capabilities
 
-Edit the ignored private `papertrail.config.json`. A capability has three setup states:
+Set the actual roots once before following an optional section. Replace either
+default if setup used a custom root:
+
+```sh
+INSTALL_ROOT="$HOME/Library/Application Support/Papertrail/app"
+DATA_ROOT="$HOME/Library/Application Support/Papertrail/data"
+WORDHOLD="$INSTALL_ROOT/bin/wordhold"
+CONFIG="$DATA_ROOT/papertrail.config.json"
+test -x "$WORDHOLD"
+test -f "$CONFIG"
+```
+
+Edit the ignored private file at `$CONFIG`. A capability has three setup states:
 
 - flag `false`: disabled; placeholders are inert;
 - flag `true` but a required value absent: unconfigured and non-healthy, with no adapter/job started;
 - flag `true` with required values: enabled; runtime health then reports never-run/healthy/stale/failed.
+
+The example's `capabilities.icloudInbox` and `icloudInboxDir` fields exist only
+to recognize private recovery state created by withdrawn pre-0.5 local-file
+Shortcuts. Leave them `false` and empty on a fresh installation. They are not
+Safari Reading List, iCloud synchronization for Reading List, or a supported
+new capture setup. See [legacy iCloud recovery](operations.md#legacy-icloud-recovery).
 
 ### Enrichment
 
@@ -227,18 +299,73 @@ Requires a locally authenticated Codex CLI. Run `codex login status`; Wordhold d
 
 ### Digest and resurfacing
 
-Set a private Messages recipient, keep `imessage.dryRun=true`, and enable only the desired job flag. Dry-run writes a private local outbox. A live send requires changing dry-run deliberately and granting macOS Automation to the invoking executable. Full Disk Access and Messages Automation are unrelated permissions.
+Digest is a deterministic weekly archive/health summary. Resurfacing is a daily
+selection of up to three old highlights and journals successful live delivery.
+Read their exact selection, message, and retirement effects in
+[Operations](operations.md#digest-and-resurfacing-effects) before enabling
+either job. Set a private Messages recipient, keep `imessage.dryRun=true`, and
+enable only the desired job flag. Dry-run writes a private local outbox. A live
+send requires changing dry-run deliberately and granting macOS Automation to
+the invoking executable. Full Disk Access and Messages Automation are unrelated
+permissions.
 
 ### Safari Reading List
 
 In the private `papertrail.config.json`, set
 `capabilities.readingList` to `true` and `readingListPlist` to
-`~/Library/Safari/Bookmarks.plist`. Then schedule Wordhold or run it manually.
-Reading List needs Full Disk Access for the stable compiled daemon at
-`$DATA/dist/papertrail-daemon` (the installer prints the resolved absolute
-path); `EPERM`/`EACCES` is a visible setup failure, never an empty source.
-Reading List permission is unrelated to iPhone Shortcut capture; the latter
-does not need Full Disk Access.
+`~/Library/Safari/Bookmarks.plist`. Reading List needs Full Disk Access for the
+exact daemon that reads it, not for Terminal, Codex, or the online iPhone
+Shortcut.
+
+Choose one processing mode and print its exact Full Disk Access target. For
+automatic processing, install scheduling and use its stable daemon:
+
+```sh
+"$WORDHOLD" schedule
+FDA_DAEMON="$DATA_ROOT/dist/papertrail-daemon"
+test -x "$FDA_DAEMON"
+printf '%s\n' "$FDA_DAEMON"
+```
+
+For deliberate manual drains without scheduling, use the active release's
+physical daemon path:
+
+```sh
+FDA_DAEMON="$(cd "$INSTALL_ROOT/current/bin" && pwd -P)/papertrail-daemon"
+test -x "$FDA_DAEMON"
+printf '%s\n' "$FDA_DAEMON"
+```
+
+Continue with the path printed by the branch you chose:
+
+1. Open **Apple menu → System Settings → Privacy & Security → Full Disk
+   Access**. Click **+** and authenticate if macOS asks.
+2. In the file chooser press **Shift-Command-G**, paste the absolute daemon
+   path printed above, press Return, select `papertrail-daemon` if the chooser
+   has not already selected it, and click **Open**. Ensure its switch is on.
+   Apple's current
+   [Privacy & Security guide](https://support.apple.com/guide/mac-help/change-privacy-security-settings-on-mac-mchl211c911f/mac)
+   describes the same add-and-enable control.
+3. Invoke that exact executable with the runtime roots, then inspect health:
+
+   ```sh
+   PAPERTRAIL_ROOT="$DATA_ROOT" \
+     PAPERTRAIL_APP_ROOT="$INSTALL_ROOT/current" \
+     "$FDA_DAEMON"
+   "$WORDHOLD" health
+   ```
+
+   `reading_list` must no longer report `EPERM`, `EACCES`, or Full Disk Access
+   setup failure. The ordinary `wordhold drain` wrapper is not the permission
+   proof for the scheduled stable path because it runs the active release
+   binary instead.
+
+Recheck health after every update. The manual target changes with the active
+release and must be added again after an update. For the scheduled target, a
+byte-identical update preserves the stable executable, but changed daemon bytes
+or any Reading List permission denial require removing the stale entry if
+present and adding the currently printed target again. A denial is a visible
+setup failure, never an empty Reading List.
 
 For Reading List captures from iPhone, sign the iPhone and Mac into the same
 Apple Account and enable Safari under iCloud on both devices. Use Safari's
@@ -249,12 +376,9 @@ the page.
 
 ### iPhone capture (optional)
 
-Wordhold's currently qualified online Shortcut retains the pre-0.5 name
-**Save to Papertrail — Online**. Its signed bytes, digest, and bounded device
-qualification are an exact release contract; it saves into the same Wordhold
-archive and remains supported. That evidence does not prove a new operator's
-phone or Worker. A separately qualified Wordhold-named Shortcut may replace it
-later, but documentation and code must not relabel the old file.
+Wordhold's supported online Shortcut retains the pre-0.5 name **Save to
+Papertrail — Online** because changing its signed bytes would create a different
+client. It saves into the same Wordhold archive.
 
 Use Safari **Add to Reading List** as the zero-Cloudflare path for a new or
 local-only installation. After installing the bundled 0.4.0 **Save to
@@ -275,22 +399,31 @@ inbox and Wordhold scheduling to be enabled; without scheduling, run
 `"$WORDHOLD" drain` manually. This Shortcut has no offline fallback. Text and
 Safari inputs are used only to extract one URL: it does not preserve notes,
 highlights, selected text, or PDF contents, and it refuses zero or multiple
-URLs.
+URLs. The [Shortcut contract](../integrations/shortcuts/Papertrail.md) owns its
+exact input, request, receipt, installation, rotation, and evidence limits.
 
 First deploy the optional Worker and create distinct admin and capture-only
 credentials as described below. Store the capture-only value in macOS Keychain
 under an installation-specific account and service
 `papertrail-capture-secret`; never put the admin credential on the phone. Then
-follow **Install the online iPhone client** below.
-
-The failed local-file 0.3.5, 0.3.6, and 0.3.7 workflows were not imported into
-this public history. They are not bundled alternatives and must not be
-imported. Existing legacy queue evidence remains readable for recovery; it is
-not an active setup path.
+follow **Install the online iPhone client** below. Older local-file Shortcuts
+are unsupported and are not installation alternatives; only already-existing
+private queue evidence remains readable for recovery.
 
 ### Cloudflare Worker, D1, and R2
 
-Cloudflare is optional and separately deployed. The source checkout contains
+Cloudflare is optional and separately deployed. Unlike local compiled Wordhold,
+this deployment path requires Bun. Use the official guide's [older-version
+procedure](https://bun.sh/docs/installation#installing-older-versions) with tag
+`bun-v1.3.11`; its default command installs the current Bun release, not this
+artifact's pinned toolchain. Then verify the recorded version and revision:
+
+```sh
+test "$(bun --version)" = "1.3.11"
+test "$(bun --revision)" = "1.3.11+af24e281e"
+```
+
+The source checkout contains
 `worker/wrangler.distribution.toml`; a built artifact materializes that template
 as `worker/wrangler.toml`. Do not edit the copy inside an immutable installed
 release. Copy the complete unpacked artifact into a separate mutable private
@@ -303,11 +436,14 @@ migrations, and upload distinct admin and capture-only secrets. Never leave
 For a fresh deployment, use one private workspace and this bounded sequence:
 
 ```sh
+(
+set -eu
 cd /absolute/path/to/private-wordhold-worker
 bun install --frozen-lockfile --ignore-scripts
 bunx wrangler login
 bunx wrangler d1 create YOUR_D1_DATABASE
 bunx wrangler r2 bucket create YOUR_R2_BUCKET
+)
 ```
 
 Copy the returned D1 name/id and the R2 bucket name into
@@ -315,17 +451,21 @@ Copy the returned D1 name/id and the R2 bucket name into
 schema, store two different values at Cloudflare's secret prompts, and deploy:
 
 ```sh
+(
+set -eu
+cd /absolute/path/to/private-wordhold-worker
 bunx wrangler d1 migrations apply YOUR_D1_DATABASE --remote \
   --config worker/wrangler.toml
 bunx wrangler secret put SECRET --config worker/wrangler.toml
 bunx wrangler secret put CAPTURE_SECRET --config worker/wrangler.toml
 bunx wrangler deploy --config worker/wrangler.toml
+)
 ```
 
 Keep the admin value named `SECRET` on the Mac only. In the private data root's
 `papertrail.config.json`, set `capabilities.workerInbox` to `true`, set
 `worker.baseUrl` to the deployed HTTPS origin, and set `worker.secret` to
-`env:PAPERTRAIL_SECRET`. Create or edit `$DATA/.env` with mode `0600`, define
+`env:PAPERTRAIL_SECRET`. Create or edit `$DATA_ROOT/.env` with mode `0600`, define
 the variable named `PAPERTRAIL_SECRET` there with the same admin value, and do
 not place `CAPTURE_SECRET` in that file. Run `"$WORDHOLD" drain` and
 `"$WORDHOLD" health` before configuring the phone. The capture-only credential
@@ -336,7 +476,13 @@ bindings, and secrets; do not create parallel Wordhold resources during the
 rename. For a genuinely fresh deployment, `wordhold-worker` is only the generic
 template name and may be replaced before the first deploy.
 
-The phone token may call only capture; it must receive 403 from drain/body/ack/allow/admin routes. The Mac admin secret stays off the phone. Enable `workerInbox` only after its base URL and admin secret are populated and least privilege is verified. That Mac-side capability is what later drains accepted phone rows; `iphone setup` does not enable it. Enable Wordhold scheduling as well if the drain should happen automatically. Cloudflare Email Routing additionally requires a domain managed in that account; it is unrelated to URL capture and is not needed for this setup.
+The phone token may call only capture; it must receive 403 from
+drain/body/ack/allow/admin routes. The Mac admin secret stays off the phone.
+Enable `workerInbox` only after its URL and admin secret are populated and least
+privilege is verified. That capability drains accepted phone rows; `iphone
+setup` does not enable it. Enable scheduling too if draining should be
+automatic. Cloudflare Email Routing requires a domain managed in that account;
+it is unrelated to URL capture and is not needed here.
 
 ### Install the online iPhone client
 
@@ -355,16 +501,11 @@ WORDHOLD="$HOME/Library/Application Support/Papertrail/app/bin/wordhold"
   --keychain-account YOUR_INSTALLATION_ACCOUNT
 ```
 
-Setup first resolves the Mac's matching Worker inbox configuration and sends one
-admin-authenticated `GET /v1/drain?limit=1&cursor=~` probe. The nonempty high
-cursor bypasses first-page recovery and sorts after Wordhold inbox ids, so the
-probe validates the drain contract without reading or acknowledging a queued
-row. Setup refuses an unresolved, mismatched, or unauthorized Mac drain. It
-then sends empty invalid-capture probes and forbidden-route probes with the
-capture-only credential. The capture routes must reach their exact validation
-errors; drain, body, acknowledgement, and sender administration must deny that
-credential. No credential value is printed. The ignored config stores only the
-verified HTTPS origin and Keychain reference, never the token.
+Setup verifies the Mac's matching admin drain without reading or acknowledging
+a queued row. It then proves that the capture-only credential reaches capture
+validation while drain, body, acknowledgement, and sender administration deny
+it. No credential value is printed. The ignored config stores only the verified
+HTTPS origin and Keychain reference, never the token.
 
 The command prints the exact qualified compatibility `Save to Papertrail —
 Online.shortcut` path and SHA-256 plus the first import answer, which ends in
@@ -404,18 +545,9 @@ success. Only `Accepted by Papertrail: in_…` is a Worker queue receipt; use
 `iphone status` continues to report `liveDevice: unknown`: it can inspect local
 configuration and offered/approved digests, not the phone.
 
-To rotate the phone credential, upload a new `CAPTURE_SECRET`, replace the same
-Keychain item's password, and rerun `iphone setup`. Keychain is only the Mac's
-source for verification and clipboard copy; rotation does not propagate to the
-phone. Setup deliberately returns status to `approval_required`, even when the
-reference names and generic artifact are unchanged. Copy the new token and
-replace the personalized token Text value without changing the graph, or
-re-import the exact offered artifact and answer both questions again; then run
-`iphone shortcut clear-token` and `iphone shortcut approve`. Never put the
-admin `SECRET` there. To remove this client,
-delete the Shortcut from the iPhone, revoke or rotate `CAPTURE_SECRET` if it
-should no longer authorize any capture client, remove the Keychain item if no
-longer needed, and run:
+For credential rotation and all external removal steps, follow the
+[Shortcut contract](../integrations/shortcuts/Papertrail.md#rotation-removal-update-and-maintenance).
+To remove only Wordhold's local online-client reference, run:
 
 ```sh
 "$WORDHOLD" iphone disable

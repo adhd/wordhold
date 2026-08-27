@@ -195,23 +195,11 @@ replacement and present it as the reviewed artifact.
 
 ## Historical withdrawn attempts
 
-The following local-file workflows remain only in Git/release and private
-operator history. Their adapter compatibility is recovery support, not an
-active installation choice.
-
-- **0.3.5:** the generated three-mode graph passed static/package checks but its
-  live Link path produced an empty URL, and a final Output action triggered a
-  Shortcuts conversion error. Its Note and Highlight branches were never
-  qualified.
-- **0.3.6:** the Apple-authored Link graph extracted the canonical Safari URL and
-  wrote a valid Dictionary body, but iOS inferred a `.txt` extension and clamped
-  its oversized random bound. The observed filename
-  `papertrail-link-0.3.6-2147483647.txt` can collide, so it must not be run.
-- **0.3.7:** the revised local-file graph used an intentional `.txt` envelope and
-  two safe nine-digit values. A live phone run reported
-  `Queued for Papertrail validation.`, but no correlated file, marker, identity,
-  commit, or retrieval appeared in the caught-up Mac iCloud container. That
-  phone-local notification was not a Papertrail receipt.
-
-Do not import, run, or resurrect any of those workflows. Preserve legacy queue
-and rejected-file evidence byte-exactly when recovery is required.
+The withdrawn 0.3.5–0.3.7 local-file artifacts were not imported into this
+public Git or release history. They are not bundled alternatives or supported
+inputs; retained adapter compatibility exists only to recover preserved legacy
+queue evidence. Do not import, run, or resurrect those workflows. Preserve
+legacy queue and rejected-file evidence byte-exactly, then follow [historical
+local-file recovery](../../docs/operations.md#legacy-icloud-recovery).
+The public-history boundary is documented in [source
+provenance](../../docs/source-provenance.md).

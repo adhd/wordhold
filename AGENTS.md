@@ -30,13 +30,11 @@ logs/                          daemon run logs
 <product source>/docs/         setup, operations, architecture, integrations
 ```
 
-Newsletter drain metadata is in Worker D1; every complete parsed body and its queue metadata first land together in a self-contained `email-pending/` R2 record. A small R2 recovery cursor rotates bounded scans across the entire prefix. Allowed rows and a bounded quarantine sample are returned separately, so an unacknowledged quarantine cannot block normal draining. Acknowledgement writes a tiny retained `email-acked/` R2 tombstone before deleting D1 and the pending record, so concurrent recovery cannot resurrect an acknowledged email. Neither remote store is canonical after local acknowledgement.
-
-The Mac drain enforces streaming response caps. A body over the per-message cap remains remote and is recorded in `logs/oversized-worker-bodies.jsonl`; its id is remembered locally so it cannot starve later rows or be downloaded every run. See `docs/operations.md` before retrying one.
-
-Untrusted Shortcut payloads are type/size checked—including serialized JSON size—and their RFC 3339 timestamps canonicalized before raw spooling. The phone uses a capture-only Worker token; it can call capture routes but cannot drain, read bodies, acknowledge, allow senders, or administer. Invalid iCloud files live in `logs/bad-captures/`; invalid/corrupt Worker row metadata is recorded in `logs/bad-worker-captures.jsonl` and remains unacknowledged. Unknown mail quarantine is single-store D1: an atomic trigger keeps 50 rows, complete payloads fit 32 KiB, and new quarantine never writes R2. Accepted senders retain the full R2-backed no-loss path; retained `sender-allowed/` markers are the fallback when D1 authorization lookup fails. Run `worker:sync-senders` after upgrading, and let bounded R2- and D1-driven recovery tombstone/retire legacy quarantines, including rows whose old body object is already missing. Never bypass these boundaries merely to clear a queue.
-
-The launchd daemon is a compiled Bun executable. Runtime assets such as `core/schema.sql` must be bundled into it, not resolved through `import.meta.dir`; `tests/launchd.test.ts` executes the compiled binary against a fresh corpus to enforce this.
+Detailed ingestion, newsletter, Worker, Shortcut, launchd, and recovery contracts
+belong in `docs/architecture.md`; operational recovery procedures belong in
+`docs/operations.md`. Read the owning section before changing one of those
+boundaries, and never bypass a queue, quarantine, writer intent, or
+acknowledgement rule merely to make a run appear successful.
 
 ## Reading
 
@@ -69,12 +67,58 @@ The launchd daemon is a compiled Bun executable. Runtime assets such as `core/sc
    Runtime writers must use `core/writer.ts`: claim before mutation, refuse pre-existing dirty paths, and clear an intent only after its scoped commit succeeds.
 9. Never print secrets (`.env`, worker secret) into logs or chat.
 10. Keep documentation current in the same coherent change. `README.md` owns
-the product boundary and docs map; `docs/architecture.md` owns invariants;
-`docs/setup.md` owns fresh setup; `docs/operations.md` owns lifecycle/recovery;
-`docs/integrations.md` owns client behavior; `docs/release-verification.md` owns
-generic synthetic evidence; private operator evidence owns live installation
-facts. Add comments for non-obvious safety or lifecycle contracts, not
-line-by-line narration. Do not duplicate volatile status.
+    the product boundary and docs map; `docs/architecture.md` owns invariants;
+    `docs/how-it-works.md` owns the day-to-day user model; `docs/setup.md` owns
+    fresh setup; `docs/operations.md` owns lifecycle/recovery;
+    `docs/integrations.md` owns client behavior; `docs/source-provenance.md` owns
+    the public-source/history boundary; `docs/release-verification.md` owns
+    generic synthetic evidence; `SECURITY.md` owns vulnerability reporting;
+    accepted architectural decisions live under `docs/decisions/`; private
+    operator evidence owns live installation facts. Add comments for non-obvious
+    safety or lifecycle contracts, not line-by-line narration. Do not duplicate
+    volatile status.
+
+## Engineering map
+
+Use this map to find the owning code, documentation, and first focused tests.
+Also run adjacent tests when a change crosses a boundary.
+
+| Subsystem | Owning code | Owning docs | Focused tests |
+| --- | --- | --- | --- |
+| Canonical storage, SQLite, Git, writer intents, restore proof | `core/store.ts`, `core/db.ts`, `core/git.ts`, `core/writer.ts`, `core/atomic.ts`, `core/schema.sql`, `scripts/verify-local-restore.ts` | `docs/architecture.md`, `docs/operations.md` | `tests/core-store.test.ts`, `tests/core-rebuild.test.ts`, `tests/core-git.test.ts`, `tests/core-atomic.test.ts`, `tests/writer.test.ts`, `tests/restore-rehearsal.test.ts` |
+| Capture transaction, adapters, extraction, outbound fetch | `core/capture-*.ts`, `daemon/main.ts`, `daemon/raw-spool.ts`, `daemon/adapters/`, `daemon/extract.ts`, `daemon/public-fetch.ts` | `docs/architecture.md`, `docs/how-it-works.md` | `tests/capture-request.test.ts`, `tests/raw-spool.test.ts`, `tests/daemon-integration.test.ts`, `tests/adapters-*.test.ts`, `tests/extract-*.test.ts`, `tests/public-fetch.test.ts` |
+| Structured query, CLI, MCP, doctor, health | `core/query.ts`, `core/doctor.ts`, `core/health.ts`, `cli/pt.ts`, `cli/wordhold.ts`, `mcp/` | `docs/architecture.md`, `docs/integrations.md`, `docs/operations.md` | `tests/cli.test.ts`, `tests/mcp-integration.test.ts`, `tests/doctor.test.ts`, `tests/health.test.ts`, `tests/recent-pagination.test.ts` |
+| Enrichment, digest, resurfacing | `agent/`, `daemon/digest.ts`, `daemon/resurface.ts`, `core/journal.ts`, `scripts/verify-live-digest.ts` | `docs/architecture.md`, `docs/operations.md` | `tests/enrichment.test.ts`, `tests/digest.test.ts`, `tests/resurface.test.ts`, `tests/live-verification.test.ts` |
+| Worker and newsletter | `worker/src/`, `worker/migrations/`, `daemon/adapters/worker-inbox.ts`, `daemon/email-item.ts` | `docs/architecture.md`, `docs/setup.md`, `docs/operations.md` | `tests/worker-*.test.ts`, `tests/newsletter-e2e.test.ts`, `tests/adapters-worker.test.ts`, `tests/email-item.test.ts`, `tests/allow-sender.test.ts` |
+| Installation, lifecycle, launchd, client/phone integrations | `cli/wordhold.ts`, `core/installation.ts`, `core/shortcut-*.ts`, `scripts/init-local.ts`, `scripts/install-*.ts`, `scripts/lifecycle.ts`, `scripts/configure-iphone.ts`, `scripts/verify-online-shortcut.ts` | `docs/setup.md`, `docs/operations.md`, `docs/integrations.md` | `tests/guided-setup.test.ts`, `tests/lifecycle-safety.test.ts`, `tests/launchd.test.ts`, `tests/agent-integrations.test.ts`, `tests/iphone-*.test.ts`, `tests/shortcut-*.test.ts` |
+| Public source, privacy, artifact and release boundary | `core/artifact.ts`, `scripts/build-distribution.ts`, `scripts/package-distribution.ts`, `scripts/release-candidate.ts`, `scripts/verify-source-boundary.ts`, `scripts/verify-release-download.ts`, `scripts/verify-third-party-licenses.ts` | `docs/source-provenance.md`, `docs/release-verification.md`, `SECURITY.md` | `tests/source-boundary.test.ts`, `tests/privacy-*.test.ts`, `tests/distribution.test.ts`, `tests/release-*.test.ts`, `tests/docs.test.ts`, `tests/third-party-licenses.test.ts` |
+
+## Safe development workflow
+
+1. Confirm the product-source repository root and inspect `git status --short`.
+   Preserve unrelated changes. Read `README.md`, this file, the owning document
+   above, and applicable decisions under `docs/decisions/` before editing.
+2. Never point development or test commands at a live `PAPERTRAIL_ROOT`, an
+   installed application root, or a private Worker deployment. Do not run live
+   sends, provider deployments, device automation, migrations, or corpus
+   recovery as part of ordinary source validation. Tests must use their isolated
+   temporary roots and fake external seams.
+3. Use the Bun version and executable digest pinned in `README.md`, then install
+   with `bun install --frozen-lockfile --ignore-scripts`.
+4. Run the focused tests from the map while iterating. Add a behavior test for a
+   changed contract, make the smallest coherent implementation, and keep the
+   owning documentation current.
+5. Before handoff, run validation proportionate to the change. The normal broad
+   gate is `bun test`, `bun run typecheck`, and `bun run worker:typecheck` when
+   Worker code or shared types are affected. Also run `bun run compile` for
+   daemon, packaging, runtime-asset, or release changes; run
+   `bun run verify:source` for source-boundary, privacy, packaging, or release
+   changes. Report any skipped gate and why.
+
+`tests/v01-upgrade.test.ts` is a separate retained-artifact compatibility gate.
+It skips without `PAPERTRAIL_V01_ARCHIVE`; an ordinary green `bun test` does not
+prove it. Follow `docs/release-verification.md` for release work rather than
+claiming that gate from the normal development suite.
 
 ## Agent skills
 

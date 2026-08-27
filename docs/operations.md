@@ -1,6 +1,10 @@
 # Operations and recovery
 
-Wordhold is intended to run without routine human upkeep. Use this guide when checking health, deploying an update, or recovering from a failure.
+Wordhold is intended to run without routine human upkeep. Use this guide to
+operate an installed system, update or remove it, prove a backup, or recover
+from a failure. Start with [Setup](setup.md) for a first installation. Release
+authors should use [Release verification](release-verification.md), not this
+operator guide.
 
 Wordhold 0.5 retains the Papertrail machine namespace used by earlier releases.
 The paths and identifiers below are therefore intentional compatibility
@@ -8,7 +12,20 @@ contracts. Update an existing installation in place; do not create parallel
 Wordhold-named data, LaunchAgent, MCP, Keychain, Worker, or Shortcut state. A
 fresh optional Worker may use the Wordhold template name documented below.
 
-## Source-distribution lifecycle
+Commands in this guide use the default roots below. If setup used custom roots,
+replace them here before running any operational command. These values govern
+update, removal, queue, backup, and recovery examples; the shell does not
+discover a custom installation automatically.
+
+```sh
+APP="$HOME/Library/Application Support/Papertrail/app"
+DATA="$HOME/Library/Application Support/Papertrail/data"
+WORDHOLD="$APP/bin/wordhold"
+test -x "$WORDHOLD"
+test -d "$DATA/.git"
+```
+
+## Install, update, or remove the program
 
 Install and update only from the canonical GitHub release after its receipt and
 complete archive SHA-256 agree. That same-channel check establishes release
@@ -16,22 +33,40 @@ integrity, not independent publisher identity. The adjacent manifest then
 checks exact inventory, file hashes, executable modes, and host compatibility
 during lifecycle operations:
 
-```sh
-APP="$HOME/Library/Application Support/Papertrail/app"
-DATA="$HOME/Library/Application Support/Papertrail/data"
-WORDHOLD="$APP/bin/wordhold"
+For a first installation:
 
-# First release:
+```sh
+(
+set -eu
 cd /path/to/unpacked-wordhold-artifact
 ./wordhold setup
+)
+```
 
-# Later, run update from the newly unpacked release:
+For an update, use the newly unpacked release:
+
+```sh
+(
+set -eu
 cd /path/to/unpacked-new-wordhold-artifact
 ./wordhold update
+)
+```
 
-# If setup used a custom program root, repeat that exact root:
+If setup used a custom program root:
+
+```sh
+(
+set -eu
+cd /path/to/unpacked-new-wordhold-artifact
 ./wordhold update --install-root /absolute/custom/program/root
+)
+```
 
+To remove the installed program, verified scheduling, and any unchanged
+Wordhold-managed Codex/Hermes registration or Hermes skill:
+
+```sh
 "$WORDHOLD" uninstall
 ```
 
@@ -50,198 +85,87 @@ retries the scheduled-job reconciliation before reporting that no program
 update was needed.
 
 Default uninstall removes only exact installer-owned program releases, wrappers,
-pointer, receipt, verified LaunchAgents, and unchanged managed client state. Any
-extra or changed member makes it refuse before deleting program files. It
-reports but does not remove the separate data root, `papertrail.config.json`,
-private Git history, queues, credentials, or remote resources. If a recorded
-Codex/Hermes CLI was independently removed, reinstall that client and retry;
-the conservative failure preserves program and receipt for recovery.
-Uninstall also cannot edit the phone Shortcut: disable or remove it separately
-or it can continue placing accepted captures in the Worker after Wordhold is
-removed. Reading List and any preserved legacy iCloud handoff are external too.
+pointer, receipt, verified LaunchAgents, and unchanged managed client state. It
+refuses before deleting program files if an owned member changed unexpectedly.
+It preserves the separate data root, private Git history, queues, configuration,
+credentials, phone Shortcut, Reading List, legacy iCloud evidence, and remote
+resources. That makes `uninstall` program removal, not data erasure or full
+decommissioning.
 
-The clean product-source repository is the only development authority; every
-corpus is a different private repository. `build:distribution` and
-`package:distribution` are useful lower-level development checks, but a release
-producer must use the candidate orchestration below. It binds one reviewed RC
-tag and clean `HEAD` to one allowlisted, compiled, ad-hoc-signed archive and one
-path-free receipt. In release mode, every distributed source byte must equal
-its `HEAD` blob even when Git index flags conceal a working-tree change. Runtime
-dependencies are installed inside the new build root from the frozen lockfile
-with package scripts disabled; ambient `node_modules` is not release input. The
-output directory must not already exist.
+Release production, tagging, GitHub publication, remote qualification, and
+promotion are maintainer-only work. The complete procedure and its immutable
+release rules live in [Release verification](release-verification.md).
 
-Finish and commit all source, tests, and documentation before choosing the RC.
-Run the complete local gate, push `main`, require the CI run for that exact
-revision to succeed, and only then create and push the RC tag. Build from a
-fresh checkout whose `HEAD`, `origin/main`, remote `main`, and remote RC tag all
-resolve to that commit. Enable release immutability before creating the GitHub
-release. The retained v0.1 input is exact: do not replace it with a rebuild or
-fixture.
+## Read and inspect
 
 ```sh
-(
-set -eu
-REPOSITORY=adhd/wordhold
-RC=v0.5.0-rc.3
-RC_STEM=Wordhold-0.5.0-rc.3-darwin-arm64
-SOURCE=/absolute/new/path/wordhold-v0.5.0-rc.3-source
-RC_OUTPUT=/absolute/new/path/wordhold-v0.5.0-rc.3
-ARCHIVE="$RC_OUTPUT/$RC_STEM.tar.gz"
-RECEIPT="$RC_OUTPUT/$RC_STEM.receipt.json"
-V01_ARCHIVE=/absolute/path/to/retained-Papertrail-0.1.0-darwin-arm64.tar.gz
-V01_SHA256=d4e24a228a67de6b3494ce9c2f3bb056528f51952f7022b0b36c381c7be590f1
-
-# In the reviewed canonical worktree, every local gate and status must be clean.
-bun run verify:source
-bun run audit:dependencies
-bun run verify:licenses
-bun test
-bun run typecheck
-bun run worker:typecheck
-bun run compile
-test -z "$(git status --porcelain=v1 --untracked-files=all)"
-REVISION="$(git rev-parse HEAD)"
-git push origin main
-
-# Bind the tag to a successful CI run for this exact pushed revision. A short
-# poll handles the normal delay before GitHub creates the run record.
-RUN_ID=
-for ATTEMPT in $(jot 30); do
-  RUN_ID="$(gh run list --repo "$REPOSITORY" --workflow CI --commit "$REVISION" \
-    --event push --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
-  test -z "$RUN_ID" || break
-  sleep 2
-done
-test -n "$RUN_ID"
-gh run watch "$RUN_ID" --repo "$REPOSITORY" --exit-status
-test "$(gh run view "$RUN_ID" --repo "$REPOSITORY" --json headSha --jq .headSha)" = "$REVISION"
-test "$(gh run view "$RUN_ID" --repo "$REPOSITORY" --json conclusion --jq .conclusion)" = "success"
-git tag -a "$RC" -m "Wordhold $RC"
-git push origin "$RC"
-
-# Build and qualify locally from a new clone, never the development worktree.
-git clone --branch main https://github.com/adhd/wordhold.git "$SOURCE"
-cd "$SOURCE"
-git fetch origin tag "$RC"
-bun install --frozen-lockfile --ignore-scripts
-test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
-test "$(git rev-parse HEAD)" = "$(git rev-parse "$RC^{commit}")"
-bun --no-env-file --config=/dev/null run scripts/release-candidate.ts \
-  --candidate "$RC" --output "$RC_OUTPUT"
-WORDHOLD_RELEASE_ARTIFACT="$RC_OUTPUT/$RC_STEM" \
-  PAPERTRAIL_V01_ARCHIVE="$V01_ARCHIVE" \
-  bun test tests/guided-setup.test.ts tests/v01-upgrade.test.ts
-
-# The clone-level install supplies the test harness. The release producer performs
-# its own locked production-only install inside the isolated build root.
-
-# This repository setting applies to releases published after it is enabled.
-gh api --method PUT -H "X-GitHub-Api-Version: 2026-03-10" \
-  "repos/$REPOSITORY/immutable-releases"
-gh api -H "X-GitHub-Api-Version: 2026-03-10" \
-  "repos/$REPOSITORY/immutable-releases"
-
-# The tag must already exist on the remote. Keep the release mutable only while
-# its two assets are being qualified.
-gh release create "$RC" --repo "$REPOSITORY" --verify-tag --draft \
-  --prerelease --latest=false --title "Wordhold $RC" --notes-file /path/to/release-notes.md
-gh release upload "$RC" "$ARCHIVE" "$RECEIPT" --repo "$REPOSITORY"
-
-# DRAFT_DOWNLOAD must be a fresh, empty directory. Download assets, never the
-# automatic GitHub source archives and never a local copy or cache.
-DRAFT_DOWNLOAD=/absolute/new/empty/draft-download
-test ! -e "$DRAFT_DOWNLOAD"
-mkdir -m 700 "$DRAFT_DOWNLOAD"
-gh release download "$RC" --repo "$REPOSITORY" --dir "$DRAFT_DOWNLOAD" \
-  --pattern "$RC_STEM.tar.gz" --pattern "$RC_STEM.receipt.json"
-cmp "$ARCHIVE" "$DRAFT_DOWNLOAD/$RC_STEM.tar.gz"
-cmp "$RECEIPT" "$DRAFT_DOWNLOAD/$RC_STEM.receipt.json"
-bun run release:verify-download -- \
-  --release-state draft \
-  --candidate "$RC" \
-  --archive "$DRAFT_DOWNLOAD/$RC_STEM.tar.gz" \
-  --receipt "$DRAFT_DOWNLOAD/$RC_STEM.receipt.json" \
-  --v01-archive "$V01_ARCHIVE" \
-  --v01-sha256 "$V01_SHA256"
-
-# Publish only after the draft download passes. Immutability starts at publish.
-gh release edit "$RC" --repo "$REPOSITORY" --draft=false --prerelease
-gh release view "$RC" --repo "$REPOSITORY" \
-  --json tagName,isDraft,isPrerelease,isImmutable,assets
-
-# FINAL_DOWNLOAD must be another fresh, empty directory. Fetch the published
-# assets through public HTTPS with GitHub credential variables removed, then
-# repeat cmp and release:verify-download there; do not reuse DRAFT_DOWNLOAD.
-FINAL_DOWNLOAD=/absolute/new/empty/published-download
-test ! -e "$FINAL_DOWNLOAD"
-mkdir -m 700 "$FINAL_DOWNLOAD"
-env -u GH_TOKEN -u GITHUB_TOKEN curl -fL --proto '=https' --tlsv1.2 \
-  -o "$FINAL_DOWNLOAD/$RC_STEM.tar.gz" \
-  "https://github.com/$REPOSITORY/releases/download/$RC/$RC_STEM.tar.gz"
-env -u GH_TOKEN -u GITHUB_TOKEN curl -fL --proto '=https' --tlsv1.2 \
-  -o "$FINAL_DOWNLOAD/$RC_STEM.receipt.json" \
-  "https://github.com/$REPOSITORY/releases/download/$RC/$RC_STEM.receipt.json"
-cmp "$ARCHIVE" "$FINAL_DOWNLOAD/$RC_STEM.tar.gz"
-cmp "$RECEIPT" "$FINAL_DOWNLOAD/$RC_STEM.receipt.json"
-bun run release:verify-download -- \
-  --release-state published \
-  --candidate "$RC" \
-  --archive "$FINAL_DOWNLOAD/$RC_STEM.tar.gz" \
-  --receipt "$FINAL_DOWNLOAD/$RC_STEM.receipt.json" \
-  --v01-archive "$V01_ARCHIVE" \
-  --v01-sha256 "$V01_SHA256"
-)
-```
-
-Require the published view to report the expected tag, `isDraft: false`,
-`isPrerelease: true`, `isImmutable: true`, and exactly the two expected assets
-with their expected sizes. Never use `--clobber`, move a published RC tag, or
-replace/delete a published asset. A byte change requires a new RC identifier
-and the complete qualification sequence.
-
-After that published download passes, the honest state is **PUBLIC RC
-QUALIFIED**. It proves the public remote round trip and the automated artifact,
-clean-install, compatibility-update, and local-core lifecycle gates. It does not
-prove browser quarantine behavior, broad macOS compatibility, or any optional
-live account/device integration. A maintainer may record one real browser
-download and Gatekeeper observation, but that observation does not block public
-source or an explicitly experimental ad-hoc RC. If this candidate is later
-promoted to final `v0.5.0`, the final tag must point to the same source revision
-and use the archive and receipt from the final verified published-RC download
-under their existing names. Do not rebuild, repackage, edit, or rename them. A
-final release from different bytes must first qualify as a new RC.
-
-The packager verifies the artifact, refuses to overwrite an archive, and
-normalizes tar owner/group metadata so the builder's account name is not leaked.
-The receipt binds the archive name, size, SHA-256, source revision, internal
-release id, target, and toolchain. The receipt, GitHub asset digest, and
-extracted manifest prove exact identity and inventory within the canonical
-GitHub channel. Ad-hoc signing catches malformed executable signatures but
-supplies no publisher identity and does not replace Developer ID or
-notarization. Users who do not accept that boundary should build the public
-source.
-
-## Normal commands
-
-```sh
-printf '%s' '{"input":"context https://example.com/article","idempotencyKey":"caller-owned-id"}' | "$WORDHOLD" capture --json
-"$WORDHOLD" capture 'https://example.com/article'
 "$WORDHOLD" recent
 "$WORDHOLD" search 'terms'
 "$WORDHOLD" show pt_...
 "$WORDHOLD" health
-PAPERTRAIL_ROOT="$DATA" "$APP/current/bin/papertrail-daemon"
-PAPERTRAIL_ROOT="$DATA" "$APP/current/bin/papertrail-enrich"
-PAPERTRAIL_ROOT="$DATA" "$APP/current/bin/papertrail-digest"
-PAPERTRAIL_ROOT="$DATA" "$APP/current/bin/papertrail-resurface"
 ```
 
-For the ordinary one-shot drain, use `"$WORDHOLD" drain`. The individual
-compiled job commands above are advanced operations. They keep all mutable state
-under `$DATA`; no database, inbox, log, or corpus file belongs under immutable
-`$APP/current`. `bun run …` forms elsewhere in this guide are development or
-private Worker-deployment commands, never installed setup commands.
+## Queue and drain
+
+Each command below changes local state. Queue one URL or use the JSON form when
+the input needs an explicit intent, URL choice, context, or idempotency key:
+
+```sh
+"$WORDHOLD" capture 'https://example.com/article'
+```
+
+```sh
+printf '%s' '{"input":"context https://example.com/article","idempotencyKey":"caller-owned-id"}' | "$WORDHOLD" capture --json
+```
+
+For an exact manual highlight attached to a page, make the selected passage the
+`input`, declare the intent, and supply that page's public URL:
+
+```sh
+printf '%s' '{"input":"Exact selected passage.","intent":"highlight","url":"https://example.com/article","title":"Article title","idempotencyKey":"caller-owned-selection-id"}' | "$WORDHOLD" capture --json
+```
+
+Then run the ordinary one-shot drain with `"$WORDHOLD" drain`, or let installed
+scheduling do it. Queued means the request is atomically present in
+`inbox/raw/`; it becomes archived only after the daemon creates a scoped Git
+commit. No Worker secret belongs in the command, stdin payload, or receipt.
+
+The individual compiled jobs are advanced operations. Run only the intended
+one: enrichment may disclose a selected full body to OpenAI, while digest and
+resurfacing may send Messages unless configured for dry-run. Their binaries are
+`$APP/current/bin/papertrail-enrich`,
+`$APP/current/bin/papertrail-digest`, and
+`$APP/current/bin/papertrail-resurface`. Direct invocation must supply both the
+private data root and active application root required by packaged assets. For
+example, to run enrichment after checking its capability and disclosure:
+
+```sh
+PAPERTRAIL_ROOT="$DATA" \
+  PAPERTRAIL_APP_ROOT="$APP/current" \
+  "$APP/current/bin/papertrail-enrich"
+```
+
+Use the same two environment variables with either other job only after
+checking its output configuration. All mutable state stays under `$DATA`; no
+database, inbox, log, or corpus file belongs under immutable `$APP/current`.
+`bun run …` forms elsewhere in this guide are development or private
+Worker-deployment commands, never installed setup commands.
+
+### Digest and resurfacing effects
+
+The weekly digest deterministically summarizes the previous seven days of
+arrivals and source counts, a bounded manual-first highlight sample, repeated
+tags, failed or unfetched items, source health, and new tag definitions. It does
+not ask a model to invent a narrative.
+
+Daily resurfacing selects up to three highlights older than 30 days, preferring
+manual highlights two-to-one over AI highlights and prioritizing never- or
+least-recently-shown passages. A successful live send journals a `shown` event;
+after five sends that highlight leaves the pool. Dry-run writes the preview to
+the private outbox without journaling it as shown. A later `skip hl_…` or `stop
+hl_…` reply passed through the rooted command under [Resurfacing
+replies](#resurfacing-replies) journals retirement. Both jobs use Messages when
+live, so inspect dry-run output before changing `imessage.dryRun` to `false`.
 
 After an ordinary Mac reboot, log into the same macOS account. If scheduling is
 installed, macOS loads the Wordhold user LaunchAgents automatically; the
@@ -251,61 +175,71 @@ asleep defers Safari synchronization and processing until it wakes; use health
 if the daemon remains stale after login. Without scheduling, run
 `"$WORDHOLD" drain` deliberately.
 
-`wordhold capture` returns one JSON receipt with `status: "queued"`, a queue id, and
-the normalized kind/URL. Queued means the request is atomically present in
-`inbox/raw/`; it becomes archived only after the daemon creates a scoped Git
-commit. Agents should use JSON on stdin for highlights, explicit URL choices,
-or text containing shell punctuation. No Worker secret belongs in the command,
-stdin payload, or receipt.
+`wordhold capture` returns one JSON receipt with `status: "queued"`, a queue id,
+and the normalized kind and URL. Agents should use JSON on stdin for highlights,
+explicit URL choices, or text containing shell punctuation.
 
 ### iPhone online-client truth and removal
 
-The active **Save to Papertrail — Online** Shortcut sends one URL directly to
-the optional Worker. `Accepted by Papertrail: in_…` proves durable remote
-queueing, not canonical archival. The Mac may be off at capture time; a later
-successful daemon commit and structured retrieval prove the local archive.
-Without phone internet, the Shortcut has no fallback and cannot show success.
-The request contains only `{url}` and no caller idempotency key. A repeated
-successful gesture can therefore create another Worker row, although canonical
-URL identity makes local ingestion converge rather than create duplicate items.
-Automatic draining additionally requires the Worker inbox capability and
-Wordhold scheduling; otherwise use `"$WORDHOLD" drain`.
+The optional online Shortcut sends one URL to the Worker. Its acceptance
+message proves remote queueing, not a local archive. The Mac may be off during
+capture; the daemon commits the item after the Mac returns. There is no offline
+phone fallback. The complete artifact and receipt contract is in
+[Save to Papertrail — Online](../integrations/shortcuts/Papertrail.md).
 
 ```sh
 "$WORDHOLD" iphone status
-"$WORDHOLD" iphone shortcut clear-token
+```
+
+`iphone status` reports the offered and approved artifact state plus the last
+local setup proof. It cannot inspect the phone, prove Share Sheet visibility,
+or detect every remote credential change. `repair_required` means the active
+release's bundled Shortcut no longer matches the offer stored by the last
+successful setup or update. `update_available` means the stored offer differs
+from the artifact the owner last approved. A blocked Worker drain means the
+local Worker configuration no longer supports the online client. Repair the
+reported prerequisite, rerun `iphone setup`, update the phone, and approve the
+exact offered artifact.
+
+The `legacyIcloud` status concerns preserved recovery evidence, not the online
+queue. The withdrawn workflows are not supported capture methods. See
+[Legacy iCloud recovery](#legacy-icloud-recovery) before changing that state.
+
+To remove only the local online-client reference:
+
+```sh
 "$WORDHOLD" iphone disable
 ```
 
-`iphone status` reports the bundled offer version/name, exact offered versus
-approved digest state, and whether the last setup proved a capture-only
-HTTPS/Keychain reference. `approval_required`, `approved`, `update_available`,
-and `repair_required` describe local artifact bookkeeping only.
-`repair_required` means the active artifact no longer matches its stored offer;
-rerun `iphone setup`, re-import or update the exact offered artifact, and then
-approve it. `state: blocked` with `worker: drain_unconfigured` means the
-resolved local Worker capability, origin, or admin-secret reference no longer
-matches the online client. Restore that matching drain, rerun setup, then
-re-import/update and approve. Status is a local configuration check; remote
-credential drift appears in Worker health or the next setup/copy-token check.
-`liveDevice` remains `unknown`; Mac inspection cannot prove Share Sheet
-visibility or a successful phone gesture. Worker health and the corpus remain
-separate facts.
-
-The `legacyIcloud` object reports preserved 0.3.x local-file state for recovery.
-Its `ready/queued/stale/unavailable/changed` values refer only to the old Mac
-iCloud folder, not the online Worker queue. The old workflows remain withdrawn
-and were not imported into this public history; they are not active
-alternatives. If old ingestion must be disabled after its queued evidence is
-handled, use `iphone legacy-icloud disable`; that operation does not change the
-online client.
-
-`iphone disable` removes only the local online-client reference. It does not
-delete the Shortcut from the phone, erase the Keychain item, revoke the Worker
+The command does not delete the Shortcut from the phone, erase the Keychain
+item, revoke the Worker
 credential, delete queued rows, touch legacy iCloud evidence, or alter the
 corpus. Delete the phone Shortcut separately. Revoke or rotate
 `CAPTURE_SECRET` when it should no longer authorize any client, then remove the
 Keychain item if no longer needed.
+
+## Decommission a deployment
+
+Do not treat program uninstall as data deletion. A full decommission crosses
+several independent boundaries and should be deliberate:
+
+1. Drain or account for every local and remote queue, check health, and complete
+   a [verified backup](#create-and-verify-a-backup).
+2. Disable each capture edge. Delete the phone Shortcut and revoke its capture
+   credential; remove [managed agent integrations](integrations.md#install-verify-and-remove);
+   disable Reading List and any legacy iCloud handoff that is no longer needed.
+3. Run `"$WORDHOLD" uninstall` to remove the installed program and its owned
+   schedules. Resolve any refusal instead of deleting installation files by
+   hand.
+4. Delete optional Worker, D1, R2, and email-routing resources only after their
+   pending work and recovery evidence are accounted for.
+5. Keep the private data repository unless the owner separately chooses to
+   destroy it after a successful restore proof. Wordhold supplies no automatic
+   corpus-erasure command.
+
+Credentials in macOS Keychain and service dashboards are external state. Revoke
+them where they are authoritative; deleting a local reference alone does not
+revoke access.
 
 With `imessage.dryRun=true`, digest/resurfacing write `logs/outbox.log`; a resurfacing preview does not consume passages. Runtime logs are under `logs/`. Cloudflare sender quarantine metadata is `logs/quarantine.jsonl`. Never paste `.env`, populated config, or raw private newsletter bodies into an issue or chat.
 
@@ -329,66 +263,82 @@ Safari Reading List is an ambient append-only import, not a drainable queue. Eve
 
 Staleness thresholds match the installed schedules: 15 minutes for five-minute source draining and the daemon heartbeat, 26 hours for nightly enrichment/daily resurfacing, and eight days for the weekly digest. Raw-spool files and writer intents use the same simple 15-minute threshold based on local file modification time; 15 minutes exactly is still fresh, while 16 minutes is degraded. A recorded commit/ack failure is immediately visible on the affected source before that age rule matters. A missing Worker URL, iCloud directory, or Reading List plist is recorded as setup-needed health even though the adapter safely returns no captures. `email:<sender>` rows are event history and have no periodic stale threshold.
 
-## Updating code
+## Optional Worker deployment updates
 
-From a clean understanding of the repo status (do not discard unrelated work):
-
-```sh
-bun install
-bun test
-bun run typecheck
-bun run worker:typecheck
-bun run compile
-bun run verify:source
-```
-
-Build and test a clean artifact, then exercise its guided update path. That path
-refreshes verified LaunchAgents; check/re-grant Full Disk Access only when
-Reading List is enabled. Agent integration and Worker deployment are separate.
-Apply new D1 migrations before code that depends on them; after deploying this
-version, mirror any existing D1 allowlist into R2:
-
-The compiled daemon embeds `core/schema.sql`; it must start without reading a source-relative schema path. Scheduled compiled jobs receive `PAPERTRAIL_APP_ROOT` so versioned prompts and other assets resolve from the active release. `tests/launchd.test.ts` is the packaging regression. If launchd logs mention `/$bunfs/.../schema.sql` or `/$bunfs/.../agent/prompts`, rebuild, reinstall, and reconcile the LaunchAgents before trusting that job.
-
-Run Cloudflare commands only from the installation owner's separate private Worker
-deployment workspace. A built artifact places the generic config at
-`worker/wrangler.toml`; populate that file in the private workspace and keep its
-resource identifiers and provider state there. Existing Papertrail deployments
-retain their current Worker/resource names. Fresh deployments may keep or
-replace the template's `wordhold-worker` name before the first deploy:
+This section applies only when the optional Cloudflare Worker is enabled. A
+normal program update does not deploy it. Run Cloudflare commands from the
+owner's separate private Worker workspace, where populated bindings and
+provider state remain untracked. Read the release notes first and apply required
+D1 migrations before deploying code that depends on them:
 
 ```sh
+(
+set -eu
 cd /absolute/path/to/private-wordhold-worker
 bunx wrangler d1 migrations apply YOUR_D1_DATABASE --remote --config worker/wrangler.toml
-bunx wrangler secret put CAPTURE_SECRET --config worker/wrangler.toml
 bunx wrangler deploy --config worker/wrangler.toml
-
-cd /absolute/path/to/private-wordhold-worker
 PAPERTRAIL_ROOT="$DATA" bun run worker:sync-senders
+)
 ```
 
 Migration `0003_capture_notes.sql` must land before deploying the unified note
-route. `CAPTURE_SECRET` is a capture-client credential and must differ from the
-admin `SECRET`. The shared online Shortcut artifact contains no credential, but
-its personalized installed copy does. Rotate the value in Cloudflare and
-Keychain, rerun `iphone setup`, then copy the new token into the installed
-Shortcut or re-import the exact offered artifact. That setup run invalidates
-the prior local approval; after updating the phone, conditionally clear the
-clipboard with `iphone shortcut clear-token` and record the new confirmation
-with `iphone shortcut approve`. Keychain rotation alone does not update the
-phone. The Mac daemon and admin operations continue using
-`PAPERTRAIL_SECRET`. The sync endpoint is admin-authenticated and stores only
-normalized sender markers, never secrets.
+route. An ordinary deployment update does not rotate either credential.
+
+When deliberately rotating `CAPTURE_SECRET`, be ready to update the phone
+before running this separate command:
+
+```sh
+(
+set -eu
+cd /absolute/path/to/private-wordhold-worker
+bunx wrangler secret put CAPTURE_SECRET --config worker/wrangler.toml
+)
+```
+
+The capture credential must differ from admin `SECRET`. Replace the matching
+Keychain value, rerun `iphone setup`, update the phone's personalized Shortcut,
+clear any copied token, and approve the exact offered artifact. Keychain
+rotation alone does not update the phone. The Mac daemon continues to use the
+separate admin credential.
 
 ## Rebuild after SQLite loss or disagreement
 
-Canonical Markdown and the resurfacing journal win. Stop relying on the suspect DB, preserve it if diagnosis matters, then run:
+Canonical Markdown and the resurfacing journal win. If SQLite still opens but
+its derived contents disagree, run:
 
 ```sh
+(
+set -eu
 "$WORDHOLD" rebuild
 "$WORDHOLD" search 'known seeded phrase'
-"$WORDHOLD" health
+)
 ```
+
+If SQLite cannot open, stop any scheduled or manual daemon first. Run
+`"$WORDHOLD" unschedule` if scheduling was installed. Preserve the exact derived
+files under still-ignored names, then rebuild a fresh index:
+
+```sh
+(
+set -eu
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+for db_name in papertrail.db papertrail.db-wal papertrail.db-shm; do
+  source_file="$DATA/$db_name"
+  preserved_file="$source_file.before-rebuild-$STAMP"
+  if test -e "$source_file"; then
+    test ! -e "$preserved_file"
+    mv "$source_file" "$preserved_file"
+  fi
+done
+"$WORDHOLD" rebuild
+"$WORDHOLD" search 'known seeded phrase'
+)
+```
+
+Leave scheduling off if recovery fails. After a successful known-item/search
+check, restore the prior schedule if there was one, run a deliberate drain when
+its upstreams are safe, and then inspect health. Fresh SQLite has no prior
+source-health history, so `NEVER RUN` is expected until that pass.
 
 The rebuild restores items, stable ids, URL aliases, highlights, FTS, and resurfacing state. It replaces corpus tables in one SQLite transaction. If any canonical file is malformed, the command names its path, rolls back, and leaves the prior complete index searchable but stale. The daemon records `job:daemon` failure and stops before pulling, canonical mutation, commit, or acknowledgement. Preserve the file, compare it with Git/source evidence, and repair or restore that exact canonical file; never guess from SQLite. Rerun rebuild and the known search before restarting normal drains. Source health is operational state and is not erased by a normal rebuild. Do not hand-edit SQLite to “fix” a Markdown disagreement.
 
@@ -410,6 +360,27 @@ A transient article fetch does not retain the upstream capture after its first c
 
 Runnable recovery requires two compatible components: (1) a **completed private data-Git snapshot** containing canonical `items/`, `agent/tags.md`, and tracked `logs/resurfacing.jsonl` / `logs/new-tags.jsonl`; and (2) the exact sanitized program release, or a newer release demonstrated compatible with that data. A copied live SQLite file or loose working tree is not the proof. `papertrail.db*` is derived; `source_health` may honestly reset.
 
+### Create and verify a backup
+
+Wordhold does not choose a backup provider or silently claim that a local Git
+repository is a backup. To create recoverable evidence:
+
+1. Run `"$WORDHOLD" drain` when upstreams are available, then record
+   `"$WORDHOLD" health` and `git -C "$DATA" rev-parse HEAD`. Note any work that
+   remains queued or unhealthy rather than deleting it.
+2. Use the owner's backup system to complete a consistent, encrypted off-Mac
+   snapshot of the private data root. A whole-root snapshot includes ignored
+   in-flight directories. If the backup system cannot snapshot a changing
+   directory consistently, run `"$WORDHOLD" unschedule` for the snapshot and
+   `"$WORDHOLD" schedule` after it reports completion. Retain the matching
+   verified Wordhold archive **and** receipt, or another complete release already
+   proven compatible. A receipt alone cannot run a restore.
+3. Record the completed snapshot time, canonical commit, included in-flight
+   state, known gap, and the backup system's completion/encryption evidence.
+4. Restore that snapshot to a new location and run the proof below without
+   enabling schedules or upstreams. A job that merely uploaded files, an
+   untested archive, and another clone on the same Mac are not restore proof.
+
 Git-only backup excludes ignored `inbox/raw/`, `inbox/merges/`, and `inbox/writer-intents/`. That creates this loss window:
 
 - acknowledged canonical work after the newest backed-up commit can be lost with the Mac;
@@ -420,18 +391,42 @@ Git-only backup excludes ignored `inbox/raw/`, `inbox/merges/`, and `inbox/write
   iCloud setup, and Cloudflare resources must be protected or re-created
   separately.
 
+### Prove a restore
+
 To bind a restored private data repository to a verified compiled release,
 leave all upstreams and scheduling off until local retrieval succeeds. Point
 `DATA` at the restored Git worktree and `RELEASE` at the freshly verified,
 unpacked Wordhold artifact. Do not overwrite a recovered real config:
 
 ```sh
+(
+set -eu
 DATA=/absolute/path/to/restored-private-data
 INSTALL_ROOT=/absolute/path/to/new-program-root
 RELEASE=/absolute/path/to/verified-unpacked-wordhold
 
 test -d "$DATA/.git"
+test -x "$RELEASE/wordhold"
+test ! -e "$INSTALL_ROOT"
 git -C "$DATA" fsck --full --strict
+SNAPSHOT_COMMIT="$(git -C "$DATA" rev-parse HEAD)"
+test -z "$(git -C "$DATA" status --porcelain=v1 --untracked-files=normal)"
+for authority_path in .gitignore README.md agent/tags.md \
+  logs/new-tags.jsonl logs/resurfacing.jsonl; do
+  test -f "$DATA/$authority_path"
+  git -C "$DATA" cat-file -e "HEAD:$authority_path"
+done
+
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+for db_name in papertrail.db papertrail.db-wal papertrail.db-shm; do
+  source_file="$DATA/$db_name"
+  preserved_file="$source_file.restored-$STAMP"
+  if test -e "$source_file"; then
+    test ! -e "$preserved_file"
+    mv "$source_file" "$preserved_file"
+  fi
+done
+
 if test ! -e "$DATA/papertrail.config.json"; then
   install -m 600 "$RELEASE/papertrail.config.example.json" \
     "$DATA/papertrail.config.json"
@@ -439,16 +434,21 @@ fi
 cd "$RELEASE"
 ./wordhold setup --install-root "$INSTALL_ROOT" --data-root "$DATA"
 WORDHOLD="$INSTALL_ROOT/bin/wordhold"
+test "$(git -C "$DATA" rev-parse HEAD)" = "$SNAPSHOT_COMMIT"
+test -z "$(git -C "$DATA" status --porcelain=v1 --untracked-files=normal)"
 "$WORDHOLD" rebuild
 "$WORDHOLD" recent
-"$WORDHOLD" health
+)
 ```
 
-The shipped example config keeps every optional edge disabled. Confirm a known
-item and search result before recreating the private config, `.env`, Keychain
-items, Worker bindings, phone Shortcut, permissions, or schedules. Once those
-are restored deliberately, run the relevant health check before allowing an
-upstream drain. This recovery branch is exercised by the packaged lifecycle
+The shipped example config keeps every optional edge disabled. Compare a known
+stable item id and body, then run a known search before recreating private
+config, `.env`, Keychain items, Worker bindings, phone Shortcut, permissions,
+or schedules. An intentionally empty archive instead needs its recorded empty
+item count. `health` may honestly be nonzero because a rebuilt database has no
+source history; it is not the offline restore proof. Once external state is
+restored deliberately, run a controlled daemon pass and then health before
+normal draining. This recovery branch is exercised by the packaged lifecycle
 test; off-machine durability still requires the separate evidence below.
 
 Maintainers can run the non-networked same-Mac mechanics proof from a clean
@@ -456,8 +456,12 @@ product-source checkout pinned to the installed manifest's exact
 `source.revision`, with Bun and dependencies installed:
 
 ```sh
+(
+set -eu
 cd /absolute/path/to/wordhold-source
+DATA=/absolute/path/to/restored-private-data
 PAPERTRAIL_ROOT="$DATA" bun run scripts/verify-local-restore.ts "$DATA"
+)
 ```
 
 It uses that pinned program source to clone the data repository's `HEAD` without
@@ -493,9 +497,25 @@ New Wordhold private directories/files use `0700`/`0600`, SQLite creation is own
 - **Oversized Worker body:** the adapter cancels a single body as it crosses 64 MiB, records metadata in `logs/oversized-worker-bodies.jsonl`, and remembers its id in `logs/oversized-worker-bodies-seen.txt`. The remote row is not acknowledged, but it no longer starves later rows or consumes bandwidth every five minutes. Recover or remove the remote row deliberately; only then remove that exact id from the seen file if it should be attempted again.
 - **D1 outage during mail:** a self-contained `email-pending/` record already holds the parsed body and queue metadata in R2. The next successful `/v1/drain` promotes it into D1. Already-indexed records are checked by id without downloading their large R2 bodies again.
 - **Interrupted/concurrent newsletter acknowledgement:** `email-acked/` tombstones are the durable ordering markers. They are intentionally retained and tiny. Do not delete them to tidy the bucket; a tombstone prevents an in-flight recovery from resurrecting an acknowledged row.
-- **Unknown sender:** inspect `$DATA/logs/quarantine.jsonl`, then from the separate private Worker deployment workspace run `PAPERTRAIL_ROOT="$DATA" bun run worker:allow sender@example.com` only for the exact verified SMTP envelope address, and drain. A differing RFC `From` header is display metadata and never authorization. Quarantine lives only in D1; a trigger atomically retains the 50 newest rows. Unknown input is read to at most 1 MiB, but only a complete serialized message of at most 32 KiB is retained inline and can drain after allowlisting. Larger mail is metadata-only, carries `quarantine_body_too_large` or `quarantine_payload_too_large`, degrades Worker health, and must be resent after approval. Accepted-sender bodies alone use R2. Upgrade recovery also checks old D1 `bodyKey` rows whose R2 object has already vanished; it will not release one into a permanent body-fetch failure. If `legacy_quarantine_requires_resend` appears, approve the sender and request a resend.
+- **Unknown sender:** follow [Unknown newsletter senders](#unknown-newsletter-senders). Never authorize from the display `From` header.
 - **Sender authorization unavailable:** every verified allow operation has an R2 marker fallback. From that private Worker deployment workspace, run `PAPERTRAIL_ROOT="$DATA" bun run worker:sync-senders` after upgrading an older deployment. If neither D1 nor the marker can establish authorization, the email invocation fails visibly rather than treating a possibly known large sender as unknown and dropping its body.
 - **Large email:** body is in R2, not D1. Never “fix” a large-message issue by truncating it; `tests/worker-email.test.ts` is the regression contract.
+
+### Unknown newsletter senders
+
+Inspect `$DATA/logs/quarantine.jsonl`. Verify the SMTP envelope sender, then run
+the following from the separate private Worker workspace and drain normally:
+
+```sh
+PAPERTRAIL_ROOT="$DATA" bun run worker:allow sender@example.com
+```
+
+The RFC `From` header is display metadata, not authorization. Quarantine keeps
+the 50 newest D1 rows. Unknown input is read to at most 1 MiB; only a complete
+serialized message of at most 32 KiB can be retained inline and released after
+approval. Larger quarantined mail stores metadata only, degrades health, and
+must be resent after approval. If `legacy_quarantine_requires_resend` appears,
+approve the sender and request that resend.
 
 ## Shortcut capture trouble
 
@@ -531,19 +551,14 @@ online Shortcut does not send a title, selected text, timestamp, or
 or token is installation personalization; any graph or behavior change creates
 a new candidate and invalidates the existing artifact digest and approval.
 
-### Historical local-file recovery only
+### Legacy iCloud recovery
 
-The 0.3.5 generated workflow and the 0.3.6 and 0.3.7 Apple-authored workflows
-are withdrawn and must not be run. Their historical device trials did not
-qualify a supported local-file capture path.
-
-Preserved legacy files remain recovery evidence. The old adapter accepts its
-documented legacy envelopes and quarantines settled malformed candidate files
-under `logs/bad-captures/`; this compatibility does not make any old Shortcut a
-supported input. Never move rejected evidence back into the live queue or
-delete it to make status appear healthy. Review and copy exact bytes under a
-fresh valid recovery identity only when a deliberate operator recovery is
-justified.
+Old local-file Shortcut workflows are withdrawn and must not be used for new
+captures. Preserved files are recovery evidence, not an active alternative.
+The compatibility adapter can quarantine malformed candidates under
+`logs/bad-captures/`; never delete or recycle that evidence merely to make
+health green. After accounting for every queued file, disable the legacy edge
+with `"$WORDHOLD" iphone legacy-icloud disable`.
 
 ## Hermes capture trouble
 
